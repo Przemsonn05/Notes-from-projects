@@ -1575,3 +1575,65 @@ dwoma sieciami IP)
 ---
 ---
 ---
+
+# Sieci Komputerowe – Notatki z wykładu
+
+## Wykład 1
+
+### Podstawowe pojęcia
+- **Enkapsulacja** – proces owijania danych nagłówkami kolejnych warstw modelu sieciowego
+- **Preambuła** – pole w ramce Ethernet poprzedzające właściwe dane
+- **Broadcast** – wysyłanie ramki/pakietu do wszystkich urządzeń w sieci
+
+### VLAN
+- **Trunk** – łącze między przełącznikami przenoszące ruch wielu VLANów
+- **Tag port / port tagowany** – port przekazujący ramki z tagiem VLAN
+- **Port nietagowany** – port usuwający tag przed wysłaniem ramki do urządzenia końcowego
+- **IEEE 802.1Q** – standard tagowania ramek w sieciach VLAN *(warto znać!)*
+- **CoS (Class of Service)** – pole w nagłówku 802.1Q służące do oznaczania priorytetu ruchu
+- **Private VLAN** – mechanizm izolacji urządzeń wewnątrz jednego VLANu
+
+### Warstwy i topologie
+- **Fragmentacja transparentna vs. nietransparentna**
+- **Peer-to-peer vs. point-to-point**
+- **Węzeł hub-and-spoke** – topologia z węzłem centralnym (hub) i węzłami końcowymi (spoke)
+
+---
+
+## Wykład 2
+
+### Adresacja IP
+- **Notacja CIDR** – zapis adresu z maską w postaci `/n` (np. `192.168.1.0/24`)
+- **Klasy adresów:** A, B, C, multicast, broadcast
+- **Sieci klasowe / nieklasowe (CIDR)**
+- **APIPA** – automatyczny adres `169.254.x.x` przydzielany gdy brak serwera DHCP
+- **Localhost** – adres `127.0.0.1`, pętla zwrotna
+
+### Diagnostyka
+- **Echo Request / Echo Reply** – mechanizm ICMP używany przez `ping`
+- **TTL (Time to Live)** – licznik ograniczający liczbę skoków pakietu
+
+### Przydatne komendy (IOS)
+| Komenda | Opis |
+|---|---|
+| `tracert` | Śledzenie trasy pakietu |
+| `debug ip icmp` | Debugowanie ruchu ICMP |
+| `no debug all` | Wyłączenie wszystkich debugów |
+| `logging` | Konfiguracja logowania |
+
+### Konfiguracja urządzenia
+- **Line** – interfejs dostępu (np. `line vty 0 4` = 5 sesji zdalnych)
+- **VTY (Virtual Terminal)** – wirtualne linie do zdalnego dostępu (SSH/Telnet)
+- **Tworzenie użytkownika:** `username <nazwa> password <hasło>`
+
+---
+
+## STP (Spanning Tree Protocol)
+
+- **Unikatowość** – kluczowa cecha (unikalny Bridge ID)
+- **UDLD (Unidirectional Link Detection)** – wykrywanie jednokierunkowych łączy; tryby: *normal* i *aggressive*
+- **Parametry:** `cost` (koszt portu) i `port priority` (priorytet portu)
+- **Root Port** – port z najlepszą ścieżką do Root Bridge
+- **Designated Port** – port wyznaczony na danym segmencie
+- **Traffic Scrambling** – technika eliminacji problemów z jednokierunkowością
+- **EtherChannel (LAG)** – agregacja łączy fizycznych w jedno logiczne
