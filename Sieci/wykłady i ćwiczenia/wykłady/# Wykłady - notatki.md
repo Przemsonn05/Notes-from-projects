@@ -917,6 +917,10 @@ ustalenie prędkości oraz trybu transmisji
 CrossOver) – automatyczny wybór MDI lub MDIX zaleŜnie od 
 rodzaju wykrytego kabla łączącego interfejsy
 
+---
+---
+---
+
 ## Budowa ramki IEEE 802.3 oraz Ethernet II 
 
 ![alt text](image-8.png)
@@ -1535,7 +1539,7 @@ komplety wyników czasowych
 - Domyślny czas oczekiwania na pakiet trzy sekundy (sygnalizacja 
 standardowa ‘*’)
 
-# Diagnostyka sieci - zarządzanie tablicą ARP
+## Diagnostyka sieci - zarządzanie tablicą ARP
 
 - Narzędzie do kontroli systemowej tablicy par odpowiedników 
 adresów IP i MAC
@@ -1572,6 +1576,872 @@ odpowiednikiem portu docelowego)
 sieci IP (tworzony jest tunel GRE w celu transmisji ruchu pomiędzy 
 dwoma sieciami IP)
 
+---
+---
+---
+
+## Konfigurowanie routerów
+
+- Dokonywane za pośrednictwem:
+    - terminali systemów operacyjnych (lokalnie poprzez konsole,
+    poprzez dial-up, telnet, ssh, modem itp.),
+
+    - sieciowych usług konfiguracji zdalnej,
+
+    - interfejsów WWW,
+
+    - dedykowanego oprogramowania zarządzającego
+
+- Konfiguracja „minimum”:
+
+    - Konfigurowanie adresacji i trybów pracy interfejsów
+
+    - Definiowanie reguł aktywności interfejsów
+
+    - Określenie reguł bezpieczeństwa
+
+    - Zarządzanie procesem rutowania
+
+    - Zapis wyników sesji w pamięci trwałej
+
+## Konfigurowanie interfejsów w routerach
+
+- Adresacja IP – tworzenie adresacji dla tzw. sieci bezpośrednio
+podłączonych do rutera (czasem nazywanych „ościennymi”)
+
+- Aktywacja interfejsu i wpływ na funkcjonalność usług warstw wyższych: administrative up/down
+
+- Monitorowanie stanu interfejsu: line/protocol up/down
+
+-Pod-interfejsy (sub-interface), np.: fa 0/1.1, agregacja interfejsów.
+
+- Interfejsy loopback w ruterach i przełącznikach.
+
+- Specyfika interfejsów wymagających konfigurowania parametrów
+warstwy drugiej ISO OSI (np. serial). Definiowanie częstotliwości zegara taktującego linę, typu ramkowania, kodowania strumienia bitów itp..
+
+- Czynności diagnostyczne dla interfejsów
+
+- Interfejs rutera, a kontroler interfejsu. Monitorowanie pracy interfejsu
+
+### Przydatne polecenia:
+
+- wyłączenie klienta DNS: Router(config)#no ip domain-lookup
+
+- Wyłączenie pobierania konfiguracji przez TFTP: Router(config)#no service config
+
+- Wyłączenie stronicowania przy wypisywaniu dłuższych raportów na
+konsoli: Router#terminal length 0
+
+- Zapisywanie ustawień: Router#write mem, Router#copy running-config startup-config
+
+### Adresowanie interfejsów w routerach:
+
+- Podstawą liczbową adresowania interfejsów jest 0 (a nie 1 jak w
+przypadku portów warstwy drugiej OSI w przełącznikach Ethernet)
+
+- Gdy w ruterze zainstalowane są moduły – adres interfejsu
+poprzedzamy numerem gniazda: FastEthernet 2/0 (pierwszy port w
+module 2). Gdy w modułach są kolejne moduły – dodajemy jeszcze
+jeden przedrostek, np.: Serial 2/0/0
+
+- Interfejsy fizyczne osadzone bezpośrednio w obudowie rutera (w
+tzw. chassis rutera) są interpretowane jako znajdujące się w
+module 0: FastEthernet 0/0 (pierwszy port w chassis)
+
+- Gdy w module lub chassis zainstalowane są interfejsy różnych
+typów (np. FastEthernet, Serial, ATM, TokenRing) – ich numeracja
+dla każdego typu zaczyna się od 0
+
+- Typ interfejsu jest rozróżniany na poziomie warstwy łącza danych OSI, a nie fizycznej - czyli przykładowo interfejsy OC3/ATM i DS3/ATM w rozumieniu powyższej adresacji będą tego samego typu
+
+Przydatne pojęcia cd.:
+
+- Konfigurowanie adresu IPv4 interfejsu FastEthernet 0/0: Router(config)#interface FastEthernet 0/0, Router(config-if)#ip address 192.168.123.100 255.255.255.0, Router(config-if)#no shutdown
+
+- Konfigurowanie adresu IPv4 domyślnej bramki i sieci: Router(config)#ip default-network 192.168.1.0, Router(config)#ip default-gateway 192.168.1.1
+
+Sprawdzenie konfiguracji i podstawowa diagnostyka: Router#show ip int fa 0/0, Router#show controllers fa 0/0, Router#show run,ping...
+
+## Ruter vs Mostek
+
+- Ruter domyślnie skonfigurowany przekazuje datagramy IP
+pomiędzy bezpośrednio podłączonymi sieciami IP
+
+- Istnieje możliwość konfigurowania ruterów do pracy jako mostki.
+Funkcjonalność związana z rutowaniem IP jest wówczas
+nieaktywna, ewentualnie ograniczona do wybranych interfejsów
+
+- Mostek operuje w warstwie 2 ISO OSI (łącza danych). W przypadku
+technologii Ethernet – kolekcjonuje adresy MAC i przekazuje ramki
+Ethernet do innych swoich interfejsów fizycznych (pobodnie jak to
+robi przełącznik Ethernet, który pełni funkcję właśnie mostka)
+
+- Interfejsy fizyczne rutera zaangażowane do mostka nie potrzebują
+adresów IP (nie są widoczne w warstwie trzeciej ISO OSI)
+
+- Możliwe jest tworzenie zarówno mostka jak i rutera IP w ramach
+jednego urządzenia (rutera fizycznego) – także z połączeniem ich
+„wewnątrz” specjalnym wirtualnym interfejsem IP
+
+### Rodzaje mostków
+
+Trzy konfiguracje mostkowania rutera (Cisco):
+
+- Legacy bridging – w tym trybie rutowanie IP jest całkowicie
+wyłączone, ruter funkcjonuje jako mostek
+
+- CRB (Concurrent Routing and Bridging) - wybrane interfejsy rutera
+pracują w mostku, a pomiędzy innymi interfejsami prowadzone jest
+rutowanie IP (lecz nie ma możliwości przekazywania treści pomiędzy
+mostkiem i interfejsami podlegającymi rutowaniu IP)
+
+- IRB (Integrated Routing and Bridging) - dodatkowo (w porównaniu z
+CRB) istnieje możliwość rutowania do sieci mostkowanej za
+pośrednictwem specjalnych wirtualnych interfejsów mostka (BVI -
+Bridge Virtual Interface). Adres IP takiego interfejsu istnieje i jest
+zgodny z siecią IP, w której leży mostek (zgodny z interfejsami IP
+urządzeń podłączonych fizycznie do tych segmentów sieci, do
+których podłączone są także interfejsy rutera należące do mostka)
+
+### Przydatne polecenia cd.:
+
+- Wyłączenie rutowania IP: outer(config)#no ip routing
+
+- Przypisanie interfejsów do mostka: Router(config)#int fa 0/0, Router(config-if)#brigde-group 1, Router(config)#int fa 0/1, Router(config-if)#brigde-group 1
+
+- Konfigurowanie mostka (zezwolenie na ruch ramek Ethernet): Router(config)#bridge 1 protocol ieee
+
+- Włączenie trybu mostka IRB (tu rutowanie IP jest włączone): Router(config)#bridge irb
+
+- Przypisanie interfejsów do mostka: Router(config)#int fa 0/0, Router(config-if)#brigde-group 1, Router(config)#int fa 0/1, Router(config-if)#brigde-group 1
+
+- Stworzenie wirtualnego interfejsu IP do mostka (numer interfejsu to jednocześnie numer mostka): Router(config)#int BVI 1, Router(config-if)#ip addr 200.200.200.1 255.255.255.0, Interfejs BVI jest dostępny zarówno w mostku jak i w procesie rutowania IP – łączy sieć mostkowaną z ruterem IP.
+
+- Zezwolenie na użytkowanie protokołów rutowania dynamicznego nad
+łączem serial async: Router(config-if)#async default routing
+
+## Listy kontrole - ACL:
+
+- ACL (Access Controll Lists) służą do kontroli i blokowania ruchu lub
+czynności
+
+- Rodzaje ACL (Cisco): Standardowe\Rozszerzone\Nazwane
+
+- ACL posiadają numery, których (mieszcząca się w danym
+przedziale) określa typ ACL. Reguły w ACL „od szczegółu do ogółu”
+
+- Listy (zwane już wtedy grupami – Access group) przypisujemy do
+obiektu, który ma być kontrolowany (np. interfejs lub linia)
+
+- Istnieje też wewnętrzna numeracja w grupie - umożliwiająca
+określanie kolejności dopasowania ACL
+
+- Każda ACL definiuje akcje, jakie należy podjąć po dopasowaniu. Są
+to deny (zakaz), permit (zezwolenie ) i remark (komentarz)
+
+- Aby czynność w była dozwolona w ramach Access-group potrzebna
+jest permit (np. stawiamy na końcu regułę permit, a wcześniej
+określające sytuacje szczegółowe reguły deny).
+
+### Standard ACL
+
+- Standardowe listy dostępu (access-lists) posiadają identyfikatory z przedziału 1-99. Wartość samego identyfikatora w momencie definiowania wpisów listy wpływa na jej rodzaj.
+
+- Listy są uproszczone i pozwalają na blokowanie ruchu dotyczącego specyficznych adresów IP lub ich grup bez możliwości rozróżniania osobno cech nadawcy od odbiorcy (uwzględnia tylko źródło datagramu).
+
+- Przykład:
+Router(config)#access-list 70 deny host 10.10.10.1
+Router(config)#access-list 70 permit any
+
+- Mimo braku rozróżnienia „źródła i celu” możemy grupę ACL przypisać do ruchu wchodzącego lub wychodzącego przez interfejs (choć lista standard służy bardziej do blokowania ruchu w ramach protokołów niż interfejsów fizycznych), np.:
+Router(config)#int fa 0/0
+Router(config-if)#ip access-group 70 in
+
+### Extended ACL
+
+- Rozszerzone listy rejestrowane są w przedziale identyfikatorów 100
+-199
+
+- Pozwalają na wyszczególnienie osobno cech odbiorcy i nadawcy – w
+ramach protokołu IP
+
+- Pozwalają na określenie szczegółowych kryteriów filtrowania
+wiązanych z wieloma protokołami warstwy 3 i 4
+
+- Przykład:
+Router(config)#access-list 190 deny tcp 200.200.200.0 0.0.0.3 eq
+1234 10.10.10.0 0.0.0.255 eq 23
+
+- wykluczenie ruchu miedzy hostami 200.200.200.1-200.200.200.3
+na porcie TCP 1234, a całą siecią 10.10.10.0/24 na porcie TCP 23
+
+- Przypisanie listy do interfejsu odbywa się analogicznie, np.:
+Router(config)#int fa 0/0
+Router(config-if)#ip access-group 190 in
+
+### Named ACL
+
+- ACL można nazywać. Podczas deklarowania (brak numeru listy)
+określamy rodzaj listy (standard lub extended):
+Router(config)#IP access-list standard lista
+Ruter (config-std-nacl)#deny 10.10.10.1 0.0.0.0
+Ruter (config-std-nacl)#permit 10.10.10.2 0.0.0.0
+
+Router(config)#IP access-list extended lista2
+Ruter (config-ext-nacl)#deny TCP 10.10.10.1 0.0.0.0 20.10.10.1
+0.0.0.0 eq www
+
+Przypisanie listy do interfejsu, np.:
+Router(config-line)#access-group lista2 in
+
+## Protokoły łącz szeregowych
+
+### SLIP
+
+- SLIP - Serial Line Internet Protocol
+
+- Protokół umożliwiający połączenie poprzez linie, które wymuszają
+transmisję szeregową
+
+- Zaprojektowany w związku z koniecznością prostej obsługi łącz
+point-to-point, na poziomie alternatywnym do IEEE 802.3
+(Ethernet) i 802.5 (Token Ring) czy X.25
+
+- Transmisja prostych pakietów do przeciwległej stacji
+
+- Obecnie zastąpiony przez PPP ale stosowany dalej w
+komunikujących się przez sieć urządzeniach o niewielkiej mocy
+obliczeniowej (np. opartych o proste mikrokontrolery)
+
+- Dwa znaki specjalne pakietu:
+    - END (192) - koniec pakietu
+
+    - ESC (219) - stosowany gdy trzeba nadać znak o wartości 192
+    (END) jako dane
+
+- SLIP obsługuje wyłącznie transmisję datagramów protokołu IP (z
+próbami adaptacji dla BlueCore Serial Protocol w Bluetooth)
+
+- Maksymalna długość serii danych: 1006 bajtów
+
+- Brak kontroli błędów transmisji
+
+### PPP
+
+- PPP - Point-to-Point Protocol
+
+- Rozwinięcie wcześniejszego protokołu SLIP
+
+- Przeznaczony dla prostych połączeń, które transportują pakiety
+pomiędzy dwoma końcowymi stacjami roboczymi
+
+- Hermetyzacja/enkapsulacja PPP pozwala łączyć ze sobą różnego
+rodzaju protokoły (nagłówek pakietu - do 8 oktetów)
+
+- Wyposażony w Link Control Protocol (Protokół Kontroli Połączenia) 
+przeznaczony do automatycznego uzgadniania opcji transmisji,
+detekcji obecności drugiej strony komunikacji, zmiany ograniczeń
+wielkości pakietów, uwierzytelnienia czy ograniczania
+przepustowości połączenia
+
+#### PPP - protokół
+
+![alt text](image-18.png)
+
+#### Uwieerzytelnianie PPP
+
+- PAP (Password Authentication Protocol) – klient wysyła hasło i
+nazwę (najczęściej hosta), serwer wysyła accept lub reject po
+porównaniu z treścią posiadanej tablicy
+
+- CHAP (Challenge Handshake Authentication Protocol), wykorzystuje
+MD5 i jest bardziej bezpieczny/preferowany. Serwer wysyła
+challenge, klient wytwarza na podstawie treści challenge skrót MD5
+hash (przy użyciu znanego sobie hasła) i przekazuje go do
+sprawdzenia. Procedura jest powtarzana w losowych odstępach
+(zabezpieczenie przed podszyciem po uwierzytelnieniu)
+
+- Uwaga – w konfiguracjach systemów operacyjnych dla ruterów
+często uwierzytelnianie jest dwukierunkowe (ruter A musi
+uwierzytelnić B i odwrotnie)
+
+#### Przydatnie pojęcia:
+
+- Określenie zegara, rodzaju enkapsulacji i adresu IP:
+Router(config-if)#ip address 192.168.1.1 255.255.255.0
+Router(config-if)#clock rate 8000000
+Router(config-if)#encapsulation PPP
+Router(config-if)#no shutdown
+
+- Przykład konfigurowania PAP w PPP:
+
+    - Po stronie uwierzytelniającej zakładamy w tym celu konto
+    użytkownika systemowego i wymagamy PPP PAP w interfejsie:
+    Router(config)#username uzytkownik password haslo
+    Router(config-if)#PPP authentication PAP
+
+    - Po stronie uwierzytelnianej wysyłamy dane do autentyfikacji:
+    Router(config-if)#PPP PAP sent-username
+    uzytkownik password haslo
+
+- Włączenie trybu debug dla PAP: Router#debug ppp authentication.
+
+#### Multilink PPP (MLPPP)
+
+- Służy do agregowania wielu równoległych łącz szeregowych w
+jedno logiczne (analogicznie do EtherChannel / LAG w technologii
+Ethernet)
+
+- Może także agregować kanały czasowe w łączach szeregowych z
+multipleksowaniem w czasie
+
+- Umożliwia wprowadzenie kontrolowanej konfiguracją fragmentacji
+przesyłanych ramek – z rozproszeniem fragmentów w
+poszczególnych łączach składowych, co znacznie redukuje
+opóźnienia transmisji dużych ramek
+
+- Możliwe jest wprowadzenie rozszerzenia Multiclass Multilink PPP
+(MCML PPP) – umożliwiającego klasyfikowanie ruchu w
+zagregowanym łączu i wprowadzanie mechanizmów QoS
+
+- Tworzenie i konfigurowanie interfejsu Multilink:
+Router(config)#interface multilink 1
+Router(config-if)# ip address 200.200.205.1 255.255.255.0
+Router(config-if)# ppp multilink fragment size 100
+
+gdzie fragment size 100 określa długość maksymalną fragmentu
+
+- Zakwalifikowanie składowego interfejsu serial do multilink (należy
+zakwalifikować kolejno wiele intefejsów):
+Router(config)# int serial 0/3/0
+Router(config-if)# encapsulation ppp
+Router(config-if)# ppp multilink
+Router(config-if)# ppp multilink group 1
+
+gdzie group 1 oznacza przynależność do interfejsu multilink 1
+
+### HDLC
+
+- HDLC - High-Level Data Link Control
+
+- Tryby pracy:
+
+    - NRM (Normal Respond Mode) – stosowany gdy dostępny jest tylko
+    wariant half-duplex łącza. Wówczas komunikacja opiera się na
+    relacji master-slave, gdzie host master steruje przydziałem medium
+    poprzez komendy zawarte w specjalnych ramkach nazywanych SFrame
+
+    - ARM (Asynchronous Respond Mode) – dla full-duplex
+
+- Wyróżniamy dwa typy urządzeń: primary terminal i secondary terminal.
+
+- Ramka posiada 8 bitowe adresy stacji końcowej (dla trybu multipoint)
+oraz kontrolę poprawności (CRC16)
+
+- Cisco opracowało własny wariant tego protokołu
+
+- Ramki HDLC można wykorzystywać zarówno nad łączem
+synchronicznym jak i asynchronicznym
+
+#### HDLC - protokól i warianty
+
+![alt text](image-19.png)
+
+![alt text](image-20.png)
+
+#### Przydatne pojęcia:
+
+- Określenie zegara, rodzaju enkapsulacji i adresu IP:
+
+Router(config-if)#ip address 192.168.1.1 255.255.255.0
+Router(config-if)#clock rate 8000000
+Router(config-if)#encapsulation hdlc
+Router(config-if)#no shutdown
+
+- Z większością interfejsów fizycznych powiązane są moduły ich
+sprzętowych kontrolerów. Możliwe jest niskopoziomowe
+monitorowanie stanu interfejsu oraz łącza poprzez użycie komendy
+show controllers, np:
+
+Router#show controllers serial 0/0
+
+## Cisco - Wybrane techniki i protokoły wspomagające procesy konfigurowania sieci komputerowej
+
+### Cisco IOS - Loopback, Cisco Discovery Protocol
+
+#### Towrzenie interfejsu loopback
+
+Router(config)#interface Loopback 0
+Router(config-if)#ip address 10.0.0.1 255.255.255.0
+Router(config-if)#no shutdown
+
+- CDP (Cisco Discovery Protocol) umożliwia identyfikację sąsiadów.
+Konfigurowanie i kontrola:
+
+Router#sh cdp
+Router#sh cdp neighbors
+Router#sh cdp neighbors detail
+Router(config)#cdp timer 10
+Router(config)#cdp holdtime 90
+Router#sh cdp interfaces
+
+## ICMP
+
+- ICMP (Internet Control Message Protocol)
+
+- Jest częścią warstwy czwartej OSI,
+
+- Do swojego transportu wykorzystuje datagramy IP
+
+- Obsługuje większość sytuacji awaryjnych i informuje o nich
+zainteresowane hosty
+
+- Wykorzystywany do diagnostyki, między innymi przez komendy
+ping i traceroute
+
+- Wykorzystywany przez urządzenia sieciowe do raportowania o
+awariach lub braku możliwości wykonania usługi.
+
+- Implementacja protokołu w danym węźle sieci nie musi udostępniać
+pełnej przewidzianej tym protokołem funkcjonalności (można
+konfigurować urządzania aktywując wybrane funkcje)
+
+### Przykłądy stosowania
+
+- Wykrywanie nieosiągalnych miejsc przeznaczenia – jeśli komputer
+docelowy nie odpowiada to system, który wykrył problem wysyła do
+nadawcy komunikat Destination Unreachable:
+
+    - Jeśli komunikat ten jest wysyłany przez ruter, oznacza, że ruter
+    nie może wysyłać pakietów do danego komputera. Może to
+    nastąpić w dwóch przypadkach:
+
+        • gdy adres docelowy IP nie istnieje - Host-unreachable,
+
+        • gdy ruter nie może dostarczyć datagramu do tej sieci -
+        Network-unreachable.
+
+    - W momencie, gdy komunikat ten jest wysyłany przez host,
+    może to oznaczać, że:
+
+        • dany komputer nie posiada wsparcia dla któregoś z
+        protokołów - Protocol-unreachable,
+
+        • port TCP/UDP jest nieosiągalny- Port-unreachable.
+
+- Sterowanie przepływem danych – w przypadku, gdy odbiorca
+datagramów IP nie nadąża za ich obróbką, wysyła do nadawcy
+komunikat ICMP: Source Quench, po odebraniu którego nadawca
+czasowo wstrzymuje transmisję.
+
+- Przekierowywanie ścieżek – jeśli komputer, do którego dotarł
+datagram IP uzna, że właściwszą bramką będzie inny komputer z
+tej samej sieci, wysyła komunikat Redirect wskazujący na ten
+właśnie komputer (musi znajdować się w tej samej sieci IP). Po
+otrzymaniu takiego komunikatu nadawca aktualizuje swoją tablicę
+rutingu
+
+- Sterowanie przepływem danych – w przypadku, gdy odbiorca
+datagramów IP nie nadąża za ich obróbką, wysyła do nadawcy
+komunikat ICMP: Source Quench, po odebraniu którego nadawca
+czasowo wstrzymuje transmisję.
+
+- Przekierowywanie ścieżek – jeśli komputer, do którego dotarł
+datagram IP uzna, że właściwszą bramką będzie inny komputer z
+tej samej sieci, wysyła komunikat Redirect wskazujący na ten
+właśnie komputer (musi znajdować się w tej samej sieci IP). Po
+otrzymaniu takiego komunikatu nadawca aktualizuje swoją tablicę
+rutingu
+
+## DHCP
+
+- DHCP(Dynamic Host Configuration Protocol)
+
+- Standard umożliwiający automatyczną konfigurację adresów IP na
+komputerach pracujących w sieciach TCP/IP
+
+- Podstawowa usługa przekazuje: właściwe numery adresów IP,
+właściwe wartości “masek” podsieci, adres domyślnej bramki
+
+- Podstawowa zaleta: zredukowanie kosztów i ułatwienie
+administracji systemów TCP/IP.
+
+- Serwer DHCP bazuje na zakresach IP przyznanych dla każdej
+podsieci, standardowej konfiguracji IP, polityce przyznawania IP
+
+- Zasada działania DHCP:
+
+    - Procedura uzgodnienia nowego klienta:
+        
+        - klient: DHCP Discover
+        
+        - server: DHCP Offer
+        
+        - klient: DHCP Request
+        
+        - server: DHCP ACK
+
+    - Procedura uzgodnienia klienta po jego restarcie (klient chciałby
+    zapewne otrzymać ten sam adres IP co poprzednio – jeśli
+    aktualnie jest wolny):
+
+        - klient: DHCP Offer (swój poprzedni adres)
+
+        - server: DHCP ACK lub DHCP NACK 
+
+### Cisco IOS - konfigurowanie serwera DHCP
+
+![alt text](image-21.png)
+
+## SNMP
+
+- SNMP (Simple Network Management Protocol) - prosty protokół
+zarządzania siecią
+
+- Protokół stosowany do zarządzania urządzeniami sieci, takimi jak
+routery, drukarki, stacje robocze, terminalne urządzenia
+monitorujące (np. czujniki) itp
+
+- Protokół przewiduje istnienie jednostek-zarządców sieci oraz zbioru
+rozproszonych agentów (najczęściej urządzeń) pod kontrolą
+zarządcy
+
+- Zarządzanie polega na monitorowaniu i powodowaniu zmian treści
+zmiennych (obiektów), reprezentujących poszczególne zasoby
+urządzenia konfigurowanego zdalnie
+
+- Agent SNMP - udostępnia posiadane bazy zmiennych w postaci
+komponentów MIB (Management Information Base)
+
+- Zarządca (SNMP Manager) - monitoruje sieć wysyłając zapytania do
+urządzeń
+
+- Wersje SNMP:
+
+    - W wersji I dostępne są zapytania MIB i pułapki
+    
+    - W wersji II dostępne są dodatkowo: możliwość komunikacji w trybie
+    bulk (import całej kolekcji ustawień) oraz rozróżnianie użytkowników
+    
+    - W wersji III: dodano identyfikację użytkownika (Authentication) i
+    szyfrowanie (Privacy) i w konsekwencji warianty SNMPv3: AuthPriv,
+    noAuthPriv, AuthnoPriv. Ponadto urządzenie aktywujące pułapkę
+    SNMP musi się autoryzować u zarządcy - czyli „w przeciwnym
+    kierunku”
+
+- PDU (Protocol Data Units) - pięć typów ogólnych poleceń:
+    
+    - GetRequest - wysyłane od zarządcy do agenta w celu odczytania
+    wartości wybranej zmiennej
+    
+    - GetNextRequest - wysyłane od zarządcy do agenta w celu
+    odczytania wartości kolejnej zmiennej
+    
+    - SetRequest - wysyłane od zarządcy do agenta w celu przypisania
+    zmiennej określonej wartości
+    
+    - GetResponse - uzyskanie od agenta odpowiedzi po wysłaniu
+    pytania
+    
+    - Trap - meldunek przesyłany przez agenta, gdy zaistnieje sytuacja
+    wyjątkowa w sieci. 
+
+### Przydatne konfiguracje
+
+- Włączenie agenta SNMP i zdefiniowanie nazwy SNMP community
+jednocześnie dla zapisu i odczytu:
+
+Switch(config)# snmp-server community public rw
+
+- Tworzenie pułapki:
+
+Switch(config)#snmp-server host 192.168.123.100 version 1 cisco
+Switch(config)#snmp-server enable traps config
+Switch(config)#snmp-server enable traps flash removal
+Switch(config)#snmp-server enable traps snmp linkup
+
+- Sprawdzanie ustawień:
+
+Switch#show snmp host
+
+## Symulatory sieci kompuetrwpych
+
+- GNS3
+
+- GNS3 Dynamips
+
+- OPNET
+
+- Cisco Packet Tracer
+
+---
+---
+---
+
+## Rutowanie datagramów IP
+
+- Rutowanie , trasowanie (routing) datagramów IP:
+
+    - Statyczne – informacja na temat reguł rutowania jest
+    utrzymywana w ręcznie konfigurowanych w ruterach tablicach
+
+    - Dynamiczne – informacja ta jest pozyskiwana z użyciem
+    protokołów rutowania, następnie umieszczana w tablicach
+
+- „Protokół rutowania” (Routing protocol) - protokół zajmujący się
+zdobywaniem informacji umożliwiającej rutowanie datagramów IP
+na temat (poszukiwaniem ścieżek, optymalizacja tras dla
+datagramów IP)
+
+- „Protokół rutowalny” – protokół definiujące dane (datagramy),
+które mogą być przesyłane przez ruter (np. IP, IPX, Apple Talk)
+
+- Typy trasowania (rutowania) ze względu na charakter adresata:
+
+    - Anycast – datagram zostanie przekazany jednego z wyróżnionych
+    aktywnych odbiorców (np. najbliższego)
+
+    - Broadcast – nastąpi rozgłoszenie do wszystkich odbiorców
+    dostępnych w ramach danej adresacji
+
+    - Multicast - nastąpi rozgłoszenie do ściśle określonej puli
+    zarejestrowanych odbiorców
+
+    - Unicast - nastąpi przekazanie do ściśle określonego odbiorcy
+
+    - Geocast - nastąpi rozgłoszenie do puli odbiorców klasyfikowanych
+    geograficznie lub według topologii sieci
+
+## Wyprowadzanie datagramów IP z segmentu sieci
+
+- Bramka (gateway) - zapewnia łączność pomiędzy sieciami IP (tworząc
+z nich internet). Podłączona jest do przynajmniej dwóch różnych sieci
+IP i otrzymując datagramy z jednej z nich podejmuje decyzję, czy
+przesłać je do następnej.
+
+- Ruter (router) - urządzenie analizujące treść datagramów IP i
+przekazujące te datagramy do następnych interfejsów sieciowych
+zgodnie z zadaną polityką. Może także pełnić funkcję bramki.
+
+- Jeżeli adres IP przeznaczenia datagramu IP nie należy bieżącej sieci
+IP, nadawca przesyła pakiet na znany mu adres lokalnej bramki.
+
+- Może istnieć kilka różnych wyjść (bramek) wyprowadzających ruch z
+danej sieci IP (multihoming)
+
+- Ruter może podjąć decyzję o wpuszczeniu datagramu IP z powrotem
+do tej samej sieci, z której go otrzymał – np. z przekierowaniem do
+innego rutera
+
+## Tablica rutowania IP
+
+- Tablica rutowania IP (Routing table, Routing information base - RIB) - tablica, na bazie której ruter będzie tworzył informację dla procesu
+rutowania (trasowania) datagramów IP (Forwarding process).
+
+- Typowy wpis w tablicy składa się z następujących pozycji:
+    
+    - Destination - wzorzec adresu docelowego w nadchodzącym
+    datagramie
+    
+    - Genmask - maska wzorca (maska IP)
+    
+    - Gateway - adres IP hosta-celu dla datagramu (np. następny ruter)
+    
+    - Interface - fizyczny interfejs docelowy, przez który należy wysłać
+    datagram po dopasowaniu do wzorca
+
+    - Metrics - flagi i metryki
+    
+    - Określenie mechanizmu, dzięki któremu pozyskano wpis (protokół
+    rutowania dynamicznego, wpis dokonany przez administratora itp.)
+
+## Forwarding table
+
+- Informacja dla procesu rutowania jest zapisywana w tzw.
+forwarding table:
+
+    - w wyniku wprowadzania danych przez administratora systemu
+    (routera). Tu definiowana jest tzw. Tablica statycznych reguł
+    rutowania, której treść jest uwzględniana w forwarding table.
+    
+    - przez procesy korzystające z protokołów rutujących w drodze
+    obliczania tras do odległych sieci
+    
+    - w wyniku wystąpienia zdarzeń systemowych - np. związanych z
+    aktywnością (up/down) interfejsów, przez które przesyłane są
+    datagramy IP
+
+- W forwarding table może się także znajdować informacja dotycząca
+interfejsów wirtualnych (np. loopback), pod-interfejsów IP,
+czynności podejmowanych domyślnie itp.
+
+### Forwarding table - administrative distances
+
+![alt text](image-22.png)
+
+## CIDR
+
+- CIDR - wprowadzony w 1993 roku przez Internet Engineering Task
+Force
+
+- Zaadoptowany także do protokołu IPv6
+
+- Pozwala na używanie masek sieciowych różnej długości dla adresów
+z dowolnej podsieci
+
+- Umożliwia wydajniejszy przydział przestrzeni adresowej IPv4
+
+- Każda część informacji o rutowaniu jest rozgłaszana wraz z maską
+sieci
+
+- Definiuje notację: XX.XX.XX.XX/YY o dowolnej ilości bitów „1” w
+masce (0-32) branych pod uwagę przy dopasowywaniu reguł
+rutowania
+
+- Włączenie rutowania:
+
+Ruter(config)#ip routing
+Ruter(config)#ip classless
+
+- Definiowanie reguł statycznych:
+Ruter(config)#ip route 100.100.100.0 255.255.255.0 100.100.102.1
+gdzie 100.100.100.0 to sieć docelowa dla pakietu, 255.255.255.0 to
+maska tej sieci, a 100.100.102.1 to interfejs następnego rutera w sieci
+bezpośrednio podłączonej, na który należy wysłać pakiet do sieci
+100.100.100.0
+
+- Usuwanie reguły:
+
+Ruter(config)#no ip route 100.100.100.0 255.255.255.0 100.100.102.1
+
+- Kasowanie zawartości wygenerowanej forwarding table
+(treść zostanie wygenerowana ponownie) :
+
+Ruter#clear ip route *
+
+- W konfiguracji interfejsu rutera należy usunąć adres IP, ale włączyć
+ten interfejs:
+
+Router(config)#int f0/0
+Router (config-if)#no ip address
+Router (config-if)#no shutdown
+Router (config-if)#exit
+
+- Należy zdefiniować pod-interfejsy dla poszczególnych VLAN oraz
+enkapsulację 802.1q dla tych pod-interfejsów:
+
+Router(config)#int fa0/0.1
+Router(config-subif)#encapsulation dot1q 10
+gdzie 10 to VID odpowiedniego VLAN
+
+- Następnie należy określić adres IP pod-interfejsu
+Router(config-subif)#ip addr 10.1.1.1 255.255.255.0
+
+## Rutowanie – longest prefix match
+
+- Kolejny problem dotyczy kolizji dopasowania do dwóch reguł
+jednocześnie
+
+- Gdy reguły dopasowania i kosztów są identyczne (adres, maska i
+metryka) – ruter rozdziela ruch proporcjonalnie pomiędzy interfejsy
+docelowe wskazane tymi regułami (technika load balancing)
+
+- Gdy różnią się maską – poszukiwany jest tzw. longest prefix match.
+Jest to dopasowanie do reguły rutowania, której maska posiada
+najwięcej bitów 1 (maskuje ona dłuższy prefiks adresu IP). Maskę taką
+nazywamy też „najwyższą maską” (highest mask)
+
+- Przykład: rozpatrujemy datagram IP o adresie docelowym
+200.200.200.1, a w tablicy są reguły o wzorcach i maskach:
+
+ִ200.200.200.0/24
+ִ200.200.0.0/16
+Obydwa wzorce pasują, jednak wybrany zostanie
+200.200.200.0/24
+
+## Route summarization
+
+- Gdy do kilku sieci IP prowadzi taka sama ścieżka i dodatkowo
+przedrostki ich adresów są bitowo identyczne – adres takich sieci
+można uogólnić. Proces ten nosi nazwę Route summarization (inne
+nazwy: prefix aggregation, supernetting, route aggregation)
+
+- Sieć o uogólnionym adresie (będącą faktycznie złożeniem
+przynajmniej dwóch węzłów sieci) określamy mianem supernetwork
+lub supernet
+
+- Zagrożenie: Route summarization generalizuje adresację sieci, lecz
+być może dodając także sieci, które istnieją w innym miejscu.
+
+- Przykład: 10.1.0.0/24, 10.1.1.0/24, 10.1.3.0/24 -> 10.1.0.0/22
+w tym przypadku trzy sieci mają wspólny prefix (22 bity) i zostały
+zgeneralizowane. Lecz dołączono także sieć 10.1.2.0/24 – być może
+niesłusznie.
+
+## Klasyfikacja routerów z uwagi na lokalizację
+
+- Router wewnętrzny - router który ma podłączone do siebie tylko
+podsieci należące do tego samego ogólnie rozumianego obszaru,
+złożonego z kilku sieci
+
+- Router brzegowy - router, który jest fizycznie podłączony do więcej
+niż jednego obszaru. Pełni rolę „wyjścia na zewnątrz”.
+
+- Router szkieletowy - router który posiada interfejs w sieci
+szkieletowej. W to włączone są routery które posiadają interfejsy w
+więcej niż jednym obszarze (routery brzegowe). Router sieci
+szkieletowej nie musi być routerem brzegowym. Router który ma
+wszystkie interfejsy w sieci szkieletowej jest traktowany jako router
+zewnętrzny.
+
+## Rutowanie dynamiczne
+
+- Rutowanie dynamiczne zachodzi wówczas, gdy sąsiednie rutery
+informują się wzajemnie na temat topologii sieci IP w których
+operują
+
+- Rutery komunikują się za pośrednictwem komunikatów
+rozgłaszanych lub kierowanych do konkretnych odbiorców. W
+niektórych protokołów przypadkach rutery tworzą między sobą
+trwałe połączenia (tzw. asocjacje) w celu wymiany informacji o
+sobie i o topologii sieci.
+
+### Zasięg działania
+
+- IGP, Interior (Intradomain) Gateway Protocol - wewnętrzny
+protokół rutowania - obowiązujący w tym samym Systemie
+Autonomicznym.
+
+- EGP, Exterior (Interdmain) Gateway Protocol - protokół zewnętrzny,
+który jest wykorzystywany do komunikacji pomiędzy urządzeniami
+trasującymi w różnych Systemach Autonomicznych.
+
+- Systemy autonomiczne uzyskują numery IP z tzw. puli niezależnej
+od dostawców Internetu - PI (Provider Independent)
+
+- Przykłady protokołów rutowania dynamicznego:
+
+    - Wewnętrznych (Interior Gateway Protocol) - np. RIP, IGRP, OSPF
+
+    - Zewnętrznych (Exterior Gateway Protocol) - np. BGP
+
+- Protokół EGP przetwarza informację o trasach w sieci rozległej,
+zawierającą głównie listy numerów Systemów Autonomicznych przez
+jakie trasa prowadzi (więc ujmuje trasę abstrakcyjnie, bez ingerencji w
+topologię wnętrza danego Systemu Autonomicznego). Nie rozwiązuje
+jednocześnie problemu poszukiwania trasy wewnątrz Systemu
+Autonomicznego i w konsekwencji często jest zależny od poprawnego
+funkcjonowania IGP
+
+- Protokoły typu Interior propagują dodatkowo informację o wyjściach
+ze swojego Systemu Autonomicznego do systemów sąsiednich – co
+jest wykorzystywane w protokole EGP.
+
+
+
+---
+---
 ---
 ---
 ---

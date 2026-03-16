@@ -1649,3 +1649,211 @@ access             ↔   access       access
 **Tematyka**: VLAN, DTP, VTP, Trunking IEEE 802.1Q  
 **Data**: 2024  
 **Wersja**: 1.0
+
+---
+---
+---
+---
+---
+
+# Sieci Komputerowe – Lab 022
+### Przełączniki Cisco Catalyst: STP, EtherChannel, zarządzanie
+
+---
+
+## Zadanie A – Kanały komunikacyjne i dostęp zdalny
+
+### Konfiguracja adresu IP (interfejs VLAN1)
+```
+enable
+configure terminal
+interface vlan1
+ip address <adres_IP> <maska>
+no shutdown
+```
+
+### Sprawdzenie interfejsów
+```
+show ip interface brief
+show ip interface vlan 1
+```
+
+### Konfiguracja Telnet (linie VTY)
+```
+line vty 0 15
+password sieci
+login
+transport input telnet
+```
+> Jeśli włączony jest `aaa new-model`, należy go wyłączyć: `no aaa new-model`
+
+### Hasło trybu uprzywilejowanego (exec)
+```
+enable password sieci
+```
+
+### Konfiguracja SSH
+```
+ip domain-name domena
+hostname Mojhost
+crypto key generate rsa          # klucz min. 512 bitów (wymagane przez PuTTY)
+aaa new-model
+username sieci priv 15 password 0 sieci
+line vty 0 15
+transport input ssh
+```
+
+### Ograniczenie dostępu przez ACL
+```
+access-list 55 permit 192.168.1.0 0.0.0.255
+line vty 0 15
+access-class 55 in
+```
+> Maska w ACL zapisana jest w **inwersji bitowej** (np. `0.0.0.255` = maska `255.255.255.0`)
+
+---
+
+## Zadanie B – Spanning Tree Protocol (STP)
+
+### Sprawdzenie stanu STP
+```
+show spanning-tree
+show spanning-tree detail
+show spanning-tree vlan 1-10
+show spanning-tree summary
+show spanning-tree int fa 0/1 detail
+```
+
+### Zarządzanie root bridge
+```
+spanning-tree vlan 1 root primary      # ustawia bieżący przełącznik jako root
+spanning-tree vlan 1 root secondary    # ustawia jako zapasowy root bridge
+spanning-tree vlan 1 priority 16384    # bezpośrednie ustawienie priorytetu (wielokrotność 4096)
+```
+> Domyślna wartość priorytetu: **32768**
+
+### Ochrona root bridge
+```
+spanning-tree guard root               # blokuje przejęcie statusu root bridge przez port
+```
+
+### Priorytet portu i koszt łącza
+```
+interface fa 0/1
+spanning-tree port-priority 64        # domyślnie 128, granulacja 16
+spanning-tree vlan 1 port-priority 64
+
+spanning-tree cost 13                  # ręczne ustawienie kosztu
+spanning-tree vlan 1 cost 13
+```
+
+> Domyślne koszty STP (16-bit): 10Mbps=100, 100Mbps=19, 1Gbps=4, 10Gbps=2
+
+### Tryby STP
+```
+spanning-tree mode pvst                # Per-VLAN STP
+spanning-tree mode rapid-pvst          # Rapid Per-VLAN STP
+```
+
+### Wyłączenie STP
+```
+spanning-tree portfast default         # wyłącza STP globalnie
+spanning-tree portfast                 # wyłącza STP na porcie (tryb config-if)
+```
+> ⚠️ Wyłączenie STP przy aktywnej pętli może zablokować całą sieć!
+
+### Diagnostyka STP
+```
+debug spanning-tree events
+no debug spanning-tree events
+```
+
+---
+
+## Zadanie C – Zarządzanie adresami MAC
+
+### Przeglądanie tablicy MAC
+```
+show mac address-table
+show mac-address-table
+show mac-address-table interface fa 0/1
+```
+
+### Blokowanie stacji (statyczny wpis MAC + drop)
+```
+mac address-table static 0013.72b9.89fe vlan 1 drop
+```
+
+### Statyczny wpis MAC kierujący na port
+```
+mac-address-table static 1111.2222.3333 vlan 1 int fa0/5
+```
+
+---
+
+## Zadanie D – EtherChannel (agregacja portów)
+
+### Tworzenie interfejsu Port-Channel
+```
+interface Port-channel 1
+switchport mode access
+```
+
+### Przypisywanie portów do channel-group
+```
+interface range FastEthernet 0/1 - 2
+switchport mode access
+channel-group 1 mode on
+```
+> Numer `channel-group` musi być taki sam jak numer `Port-channel`
+
+### Sprawdzenie EtherChannel
+```
+show etherchannel summary              # statusy: D-down, P-port-channel, d-default
+show spanning-tree                     # łącze widoczne jako Po1
+```
+
+### Diagnostyka EtherChannel
+```
+debug etherchannel
+```
+
+### Reset interfejsu Port-Channel (przy błędach)
+```
+int Po 1
+shut
+no shut
+```
+
+---
+
+## Zadanie E – Ogólne czynności konfiguracyjne
+
+| Komenda | Opis |
+|---|---|
+| `no ip domain-lookup` | Wyłącza automatyczne wyszukiwanie DNS przy literówkach |
+| `hostname s0` | Zmiana nazwy przełącznika |
+| `show running-config` | Wyświetla aktualną konfigurację |
+| `write memory` | Zapisuje konfigurację do pamięci FLASH |
+| `write erase` | Kasuje konfigurację (przywraca ustawienia fabryczne) |
+| `exit` | Cofnięcie o jeden poziom w CLI |
+| `end` | Powrót do trybu exec z dowolnego poziomu |
+| `debug ip icmp` | Monitorowanie ruchu ICMP |
+| `no debug all` | Wyłączenie wszystkich procesów debug |
+
+---
+
+## Kluczowe pojęcia
+
+| Pojęcie | Znaczenie |
+|---|---|
+| **Root Bridge** | Wyróżniony przełącznik w STP, do którego liczone są ścieżki |
+| **BID** | Bridge ID – identyfikator przełącznika w STP (priority + MAC) |
+| **Root Port** | Port z najlepszą ścieżką do root bridge |
+| **Designated Port** | Najlepszy port na danym segmencie sieci |
+| **Alternative Port** | Zablokowany port zapasowy w STP |
+| **BPDU** | Bridge Protocol Data Unit – ramka STP |
+| **EtherChannel** | Logiczna agregacja portów fizycznych |
+| **VTY** | Virtual Terminal Lines – linie dla zdalnego dostępu (Telnet/SSH) |
+| **ACL** | Access Control List – lista reguł filtrowania ruchu |
+| **Port-Channel** | Interfejs logiczny reprezentujący EtherChannel |
