@@ -49,7 +49,7 @@ Example:
 
 ---
 
-## Keys
+## Keys and Tables
 
 **Primary key** — uniquely identifies each row in a table:
 
@@ -61,6 +61,55 @@ id INT PRIMARY KEY
 
 ```sql
 FOREIGN KEY (user_id) REFERENCES users(id)
+```
+
+NOT NULL (The "Mandatory" Rule)
+The NOT NULL constraint enforces a column to always contain a value. It means you cannot insert a new record or update an existing one without providing data for this specific field.
+
+- Real-world use: You wouldn't want a "User" table where the username or password is blank.
+
+- How it looks in SQL:
+
+```sql
+CREATE TABLE users (
+    user_id INT PRIMARY KEY,
+    username VARCHAR(50) NOT NULL, -- This field cannot be empty
+    email VARCHAR(100)
+);
+```
+
+UNIQUE (The "No Duplicates" Rule)
+The UNIQUE constraint ensures that all values in a column are different from one another. If you try to insert a value that already exists in that column, the database will block the transaction.
+
+Difference from Primary Key: A table can have many UNIQUE columns, but only one PRIMARY KEY. Also, most databases allow a UNIQUE column to have one NULL value (since NULL is technically not equal to another NULL), whereas a PRIMARY KEY never allows NULL.
+
+- Real-world use: Every user should have a different email address or phone_number.
+
+- How it looks in SQL:
+
+```sql
+CREATE TABLE employees (
+    emp_id INT PRIMARY KEY,
+    ssn VARCHAR(11) UNIQUE, -- Every Social Security Number must be unique
+    name VARCHAR(50)
+);
+```
+
+CHECK (The "Custom Logic" Rule)
+The CHECK constraint is the most flexible one. It allows you to specify a logical condition that every value in the column must meet. If the condition evaluates to FALSE, the data is rejected.
+
+- Real-world use: Ensuring a price is always greater than 0, or an age is at least 18.
+
+- How it looks in SQL:
+
+```sql
+CREATE TABLE products (
+    product_id INT PRIMARY KEY,
+    price DECIMAL(10,2),
+    quantity INT,
+    CHECK (price > 0),         -- Price cannot be zero or negative
+    CHECK (quantity >= 0)      -- You can't have "negative" stock
+);
 ```
 
 ---
@@ -738,15 +787,26 @@ FROM books;
 
 ## Relationships and joins
 
-### One-to-Many Relationship
+In database design, **Relationship Cardinality** defines how many records in one table can be associated with how many records in another table. It describes the "numerical relationship" between entities.
 
-One record in Table A → can be related to many records in Table B
+1. One-to-One (1:1)
+Each record in Table A is linked to exactly one record in Table B, and vice versa. This is relatively rare because often the data could just be in the same table, but it's used for security or splitting large tables.
 
-### Many-to-Many Relationship
+Example: A User and their User Profile. One user has one profile; one profile belongs to one user.
 
-- One record in Table A → relates to many records in Table B
+2. One-to-Many (1:M)
+This is the most common relationship in databases. A single record in Table A can be related to many records in Table B, but a record in Table B is related to only one record in Table A.
 
-- One record in Table B → relates to many records in Table A
+Example: A Customer and their Orders. One customer can place many orders, but each specific order belongs to only one customer.
+
+Implementation: You put the "Many" side's Foreign Key on Table B (the Orders table).
+
+3. Many-to-Many (M:N)
+Many records in Table A can be related to many records in Table B.
+
+Example: Students and Courses. A student can take many courses, and a course can have many students.
+
+Implementation: Databases cannot handle this directly. You must use a Junction Table (also called a Bridge or Associative table) that sits in the middle and turns the M:N into two 1:M relationships.
 
 ### Cross Join
 
@@ -1432,3 +1492,69 @@ To understand the levels, you first need to know the 3 Problems they prevent:
 - Non-repeatable Read: You read a row twice and get different values because someone else updated it in between.
 
 - Phantom Read: You run a search (e.g., "all users in NY") twice and get different numbers of rows because someone added a new user.
+
+### Basics info about indexes in MySQL
+
+In MySQL, an Index is a powerful tool used to speed up the retrieval of rows from a table. Think of it exactly like the index at the back of a massive textbook: instead of reading every single page to find "Photosynthesis," you look at the index, find the page number, and jump straight there.
+
+Without an index, MySQL must perform a Full Table Scan, looking at every single row from start to finish. With an index, it finds the data in a fraction of the time.
+
+1. How does it work? (The B-Tree)
+By default, MySQL (specifically the InnoDB engine) uses a data structure called a B-Tree (Balanced Tree) for its indexes.
+
+Instead of a flat list, the data is organized into a tree where the "leaves" are the actual data. When you search for a value, MySQL starts at the "root" and follows a path based on whether your value is higher or lower than the current node.
+
+2. Clustered vs. Secondary Indexes
+In MySQL's InnoDB engine, there are two main categories of indexes:
+
+A. The Clustered Index (The Physical Order)
+Every table has exactly one Clustered Index. This is almost always your Primary Key.
+
+- The Clustered Index actually is the table. The data rows themselves are stored in the leaf nodes of the B-Tree.
+
+- Because the data is physically sorted this way, searching by Primary Key is the fastest possible operation.
+
+B. Secondary Indexes (The "Pointers")
+Any other index you create (on email, last_name, etc.) is a Secondary Index.
+
+- These don't store the actual data. Instead, they store the indexed value and a pointer (the Primary Key) to the actual row in the Clustered Index.
+
+- The "Double Look-up": When you search by a secondary index, MySQL finds the Primary Key in the secondary index, then goes to the Clustered Index to get the rest of the row.
+
+### OLAP vs OLTP
+
+OLTP systems are designed to handle thousands of users making small changes at the same time. These systems must strictly follow ACID properties to ensure that a bank transfer or a seat booking doesn't get "lost" or "doubled.
+
+- "Focus: Write-heavy. We care about how fast we can save data.
+
+- Structure: Uses many small tables linked together (Normalization) to ensure data is only stored in one place.
+
+- Real-world examples:
+
+    - ATM withdrawals.
+
+    - Online e-commerce checkouts (Shopify, Amazon).
+
+    - Sending a message on WhatsApp.
+
+OLAP systems are "Data Warehouses." They don't usually record individual sales as they happen. Instead, once a day (or once an hour), they pull all the new data from the OLTP systems and "crunch" it.
+
+- Focus: Read-heavy. We care about how fast we can scan millions of rows to find an average.
+
+- Structure: Uses "Flat" tables (Denormalization) like Star Schemas or Snowflake Schemas. This makes joins fewer and queries faster.
+
+- Real-world examples:
+
+    - Netflix recommending movies based on your 2-year history.
+
+    - A CEO seeing a dashboard of global profits.
+
+    - Marketing teams analyzing customer behavior over the last decade.
+
+Why can't we just use one for both?
+
+If you try to run a massive "Average Revenue for the last 5 years" query on an OLTP database while people are trying to buy things, you will lock the tables. The cash register will stop working because the manager is using the computer to do taxes.
+
+Conversely, if you try to record a single sale in an OLAP database, it will be incredibly slow because the system is optimized to look at blocks of millions of rows, not just one.
+
+### Normalization - (good explained in Zaworski's wbsite)
