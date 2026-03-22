@@ -1,4 +1,4 @@
-# Notatki z Pandas i ML
+# Notatki z Pandas i ML (projekty)
 
 ### pd.cut()
 
