@@ -1857,3 +1857,445 @@ no shut
 | **VTY** | Virtual Terminal Lines – linie dla zdalnego dostępu (Telnet/SSH) |
 | **ACL** | Access Control List – lista reguł filtrowania ruchu |
 | **Port-Channel** | Interfejs logiczny reprezentujący EtherChannel |
+
+---
+---
+---
+---
+---
+
+# 🖧 Sieci Komputerowe – Lab 070 – Notatka krok po kroku
+
+## Topologia
+
+```
+[PC] ──── [R1 (fa0/0)] ── [R1 (fa0/1)] ──── [R2]
+```
+
+- R1 podłączony do PC (fa0/0) i do R2 (fa0/1)
+- Konsola konfiguracyjna podłączona do R1
+
+---
+
+## ✅ Zadanie A – Przygotowanie rutera (wstępna konfiguracja)
+
+### 1. Uruchomienie i wejście do trybu konfiguracji
+
+```bash
+# Po uruchomieniu rutera pojawia się karetka:
+Router>
+
+# Wejście w tryb uprzywilejowany:
+Router> enable
+Router#
+
+# Wejście w tryb konfiguracji:
+Router# configure terminal
+Router(config)#
+```
+
+> **Skrót:** `conf t` zamiast `configure terminal`  
+> **TAB** – autouzupełnianie, **?** – podpowiedzi
+
+---
+
+### 2. Wyłączenie uciążliwych funkcji
+
+```bash
+# Wyłącz automatyczne zapytania DNS (blokują CLI):
+Router(config)# no ip domain-lookup
+
+# Wyłącz pobieranie konfiguracji przez TFTP:
+Router(config)# no service config
+
+# Wyłącz stronicowanie długich wydruków (wpisz w trybie #):
+Router# terminal length 0
+```
+
+---
+
+### 3. Konfiguracja interfejsów (przykład dla fa0/1)
+
+```bash
+Router(config)# interface FastEthernet 0/1
+Router(config-if)# ip address 192.168.123.100 255.255.255.0
+Router(config-if)# no shutdown
+```
+
+> ⚠️ Większość interfejsów fizycznych jest domyślnie wyłączona (`administratively down`).  
+> Zawsze kończ `no shutdown`!
+
+---
+
+### 4. Interfejs wirtualny Loopback
+
+```bash
+Router(config)# interface Loopback 0
+Router(config-if)# ip address 10.0.0.1 255.255.255.0
+Router(config-if)# no shutdown
+```
+
+---
+
+### 5. Sprawdzanie stanu interfejsów
+
+```bash
+Router# show ip int fa 0/1
+Router# show interfaces summary
+Router# show interfaces description
+Router# show interfaces accounting
+Router# show interfaces fa 0/1
+Router# show controllers fa 0/1
+Router# show run
+```
+
+---
+
+### 6. Zapis i kasowanie konfiguracji
+
+```bash
+# Zapis do NVRAM (użyj dopiero po zakończeniu eksperymentów):
+Router# write mem
+# lub:
+Router# copy running-config startup-config
+
+# Restart rutera (NIE TERAZ):
+Router# reload
+
+# Kasowanie konfiguracji z NVRAM po zakończeniu lab:
+Router# write erase
+```
+
+> ⚠️ **Po zakończeniu laboratorium wymaż konfigurację z NVRAM** (`write erase`), żeby nie przeszkadzać kolejnym użytkownikom!
+
+---
+
+### 7. Nawigacja po CLI
+
+```bash
+exit        # wyjście o jeden poziom wyżej
+end         # skok od razu na szczyt (do Router#)
+Ctrl+Z      # to samo co end
+```
+
+---
+
+## ✅ Zadanie B – Dalsze czynności konfiguracyjne
+
+### 1. Nadanie nazwy ruterowi
+
+```bash
+Router(config)# hostname R1
+R1(config)#
+```
+
+> Każdy ruter powinien mieć unikalną nazwę – łatwiej uniknąć pomyłek.
+
+---
+
+### 2. Sprawdzenie interfejsów IP
+
+```bash
+R1# show ip interface brief
+R1# show interfaces description
+```
+
+---
+
+### 3. Filtrowanie komunikatów systemowych (konsola)
+
+```bash
+R1(config)# logging console 2
+```
+
+> 8 poziomów szczegółowości (0 = najważniejsze, 7 = debug).
+
+---
+
+### 4. Sprawdzanie konfiguracji
+
+```bash
+R1# show running-config    # bieżąca konfiguracja (RAM)
+R1# show startup-config    # konfiguracja w NVRAM
+```
+
+---
+
+### 5. Sesje użytkowników
+
+```bash
+R1# show users
+R1# show sessions
+```
+
+---
+
+### 6. Diagnostyka – ping
+
+```bash
+# Seria 1000 pingów:
+R1# ping 192.168.1.1 rep 1000
+
+# Anulowanie: CTRL+SHIFT+6
+```
+
+---
+
+### 7. Tablica ARP
+
+```bash
+R1# show arp
+```
+
+---
+
+### 8. CDP – Cisco Discovery Protocol
+
+CDP wykrywa sąsiadujące urządzenia Cisco.
+
+```bash
+# Podłącz interfejs R2 do interfejsu R1 (ta sama sieć IP!)
+
+# Sprawdzenie CDP:
+R1# show cdp
+R1# show cdp neighbors
+R1# show cdp neighbors detail
+
+# Włącz / wyłącz CDP globalnie:
+R1(config)# cdp run
+R1(config)# no cdp run
+
+# Wyłącz CDP na konkretnym interfejsie:
+R1(config)# interface fa 0/1
+R1(config-if)# no cdp enable
+
+# Sprawdź CDP per interfejs:
+R1# show cdp interface
+
+# Wyczyść tablicę CDP:
+R1# clear cdp table
+
+# Zmiana timera i czasu ważności:
+R1(config)# cdp timer 10
+R1(config)# cdp holdtime 90
+```
+
+#### Test propagacji nazwy hosta przez CDP:
+```bash
+# Zmień nazwę w jednym ruterze i obserwuj, kiedy pojawi się w sąsiednim:
+R1(config)# hostname inna
+inna# show cdp neighbors
+```
+
+---
+
+## ✅ Zadanie C – Serwer DHCP w ruterze
+
+### Cel:
+- R1 = serwer DHCP
+- PC i R2 = klienci DHCP
+
+---
+
+### 1. Włącz usługę DHCP w R1
+
+```bash
+R1(config)# service dhcp
+```
+
+---
+
+### 2. Skonfiguruj pulę DHCP
+
+```bash
+R1(config)# ip dhcp pool MOJA_PULA
+R1(dhcp-config)# network 10.10.10.0 255.255.255.0
+R1(dhcp-config)# default-router 10.10.10.1
+R1(dhcp-config)# dns-server 123.123.123.3
+R1(dhcp-config)# domain-name domena.pl
+R1(dhcp-config)# exit
+
+# Wyklucz adresy z puli (np. dla rutera i serwerów):
+R1(config)# ip dhcp excluded-address 10.10.10.10 10.10.10.20
+```
+
+> ⚠️ Interfejs R1 musi mieć adres z **tej samej sieci** co pula DHCP!
+
+```bash
+R1(config)# interface fa 0/0
+R1(config-if)# ip address 10.10.10.1 255.255.255.0
+R1(config-if)# no shutdown
+```
+
+---
+
+### 3. Ustaw R2 jako klient DHCP
+
+```bash
+R2(config)# interface FastEthernet 0/0
+R2(config-if)# ip address dhcp
+R2(config-if)# no shutdown
+```
+
+> Na PC ustaw kartę sieciową na "uzyskaj adres automatycznie (DHCP)".
+
+---
+
+### 4. Sprawdź stan serwera DHCP
+
+```bash
+R1# show ip dhcp binding
+
+# Debug DHCP:
+R1# debug ip dhcp server events
+```
+
+---
+
+### 5. Zdalna usługa DHCP (helper-address)
+
+Gdy serwer DHCP jest w innej sieci, każdy ruter pośredniczący musi przekazywać zapytania:
+
+```bash
+Router(config-if)# ip helper-address 200.200.200.1
+```
+
+> `200.200.200.1` = adres następnego przeskoku w kierunku serwera DHCP.
+
+---
+
+### 6. Po zakończeniu – wróć do statycznej adresacji
+
+Usuń `ip address dhcp` i ustaw statyczne adresy IP na wszystkich interfejsach.
+
+---
+
+## ✅ Zadanie D – Mostki sieciowe w ruterach
+
+### Typy mostkowania:
+
+| Typ | Opis |
+|-----|------|
+| **Legacy bridging** | Rutowanie IP całkowicie wyłączone, ruter = czysty mostek |
+| **CRB** | Część interfejsów w mostku, inne rutują IP (bez przepływu między nimi) |
+| **IRB** | Jak CRB + możliwość rutowania DO sieci mostkowanej przez interfejs BVI |
+
+> ⚠️ Te tryby **wzajemnie się wykluczają**. Uważaj na pozostałości poprzednich konfiguracji!
+
+---
+
+### D.2 – Legacy Bridging
+
+```bash
+# Konfiguracja interfejsów R1 – dołącz do mostka nr 1:
+R1(config)# interface fa 0/0
+R1(config-if)# bridge-group 1
+R1(config-if)# no ip address
+
+R1(config)# interface fa 0/1
+R1(config-if)# bridge-group 1
+R1(config-if)# no ip address
+
+# Wyłącz rutowanie IP:
+R1(config)# no ip routing
+
+# Zezwól na przesyłanie ramek Ethernet przez mostek 1:
+R1(config)# bridge 1 protocol ieee
+```
+
+> ⚠️ Przynajmniej **dwa interfejsy** przypisane do mostka muszą być w stanie `up`.
+
+```bash
+# Na R2 – ustaw adres IP w tej samej sieci co PC (bo R1 jest teraz mostkiem):
+R2(config)# interface fa 0/0
+R2(config-if)# ip address <adres_z_sieci_PC> 255.255.255.0
+
+# Sprawdź mostek:
+R1# show bridge group
+R1# show bridge
+
+# Sprawdź Spanning Tree:
+R1# show spanning-tree brief
+
+# Traceroute z R2 do PC – R1 NIE powinien być widoczny (działa jako mostek):
+R2# traceroute <adres_PC>
+```
+
+---
+
+### D.3 – CRB (Concurrent Routing and Bridging)
+
+Modyfikacja konfiguracji z poprzedniego punktu:
+
+```bash
+# Włącz rutowanie IP:
+R1(config)# ip routing
+
+# Uruchom tryb CRB:
+R1(config)# bridge crb
+
+# Wyłącz mostek 1 z procesu rutowania (mostkowanie zamiast rutowania):
+R1(config)# no bridge 1 route ip
+
+# Włącz mostek 1 do procesu mostkowania IP:
+R1(config)# bridge 1 bridge ip
+```
+
+```bash
+# Sprawdź traceroute (rutowanie IP działa, ale nie obejmuje mostka):
+R2# traceroute <adres_PC>
+
+# Sprawdź ping przez mostek CRB:
+R2# ping <adres_PC>
+```
+
+---
+
+### D.4 – IRB (Integrated Routing and Bridging)
+
+Modyfikacja konfiguracji z poprzedniego punktu:
+
+```bash
+# Wyłącz CRB, włącz IRB:
+R1(config)# no bridge crb
+R1(config)# bridge irb
+
+# Włącz mostek 1 do mostkowania i rutowania:
+R1(config)# bridge 1 bridge ip
+R1(config)# bridge 1 route ip
+
+# Utwórz wirtualny interfejs BVI (numer = numer mostka!):
+R1(config)# interface BVI 1
+R1(config-if)# ip address 200.200.200.3 255.255.255.0
+R1(config-if)# no shutdown
+```
+
+> ⚠️ Numer BVI **musi być zgodny** z numerem w `bridge-group` (tutaj: 1).
+
+```bash
+# Traceroute i ping – R1 (BVI) powinien teraz być osiągalny:
+R2# traceroute <adres_PC>
+R2# ping 200.200.200.3
+
+# Sprawdź komunikację PC ↔ R2 ↔ BVI:
+PC> ping 200.200.200.3
+```
+
+---
+
+## 📋 Podsumowanie najważniejszych komend
+
+| Komenda | Co robi |
+|---------|---------|
+| `enable` | Tryb uprzywilejowany |
+| `configure terminal` | Tryb konfiguracji |
+| `no ip domain-lookup` | Wyłącza DNS (zapobiega blokowaniu CLI) |
+| `no shutdown` | Aktywuje interfejs |
+| `show ip interface brief` | Szybki widok wszystkich interfejsów IP |
+| `show running-config` | Bieżąca konfiguracja |
+| `write mem` | Zapis konfiguracji do NVRAM |
+| `write erase` | **Kasowanie konfiguracji z NVRAM** |
+| `show cdp neighbors detail` | Sąsiedzi CDP ze szczegółami |
+| `show ip dhcp binding` | Przydzielone adresy DHCP |
+| `show bridge` | Stan mostka |
+| `show spanning-tree brief` | Stan Spanning Tree |

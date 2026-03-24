@@ -2438,6 +2438,966 @@ funkcjonowania IGP
 ze swojego Systemu Autonomicznego do systemów sąsiednich – co
 jest wykorzystywane w protokole EGP.
 
+## Techniki poszukiwania tras
+
+Obliczanie trasy jest wiązane z ustaleniem wartości opisującej ją
+metryki. Metryka może być wyrażona liczbą przeskoków, skalarnym
+parametrem określającym możliwości łącza, trasy itp.
+
+Techniki obliczania tras (które w konsekwencji stają się podstawą
+klasyfikowania protokołów dynamicznego rutowania IP):
+
+- Protokoły stanu łącza (Link-state) – ustalana jest informacja,
+będąca kompletnym drzewem ścieżek do innych sieci w
+obszarze działania danego protokołu. Przykład: OSPF
+- Protokoły wektora odległości (Distance-vector) – ustalana jest
+informacja, określająca jedynie metrykę do określonego celu i
+kierunek (interfejs). Brak jest informacji o pełnej ścieżce. W tej
+technice ruter bazuje na informacji preparowanej tylko przez
+jego sąsiadów („routing by rumor”). Przykład: RIP, IGRP
+- ִProtokoły hybrydowe (Balanced hybrid) - np. Path-vector stosują połączenie poprzednich technik. Przykład: BGP
+
+## Problemy technik distance vector
+
+- Pętle routingu - brak informacji o trasie do celu (jedynie o kierunku do
+niego) może prowadzić do zapętleń w przekazywaniu informacji - gdy
+istnieje wiele tras do innego rutera utworzonych z różnych sieci IP.
+Chwilowe zapętlenie może być wynikiem zbyt wolnej propagacji
+informacji (rutery nie będące jeszcze w stanie zbieżności przekazują ten
+sam datagram IP do siebie nawzajem). Zjawisko zapętlenia jest
+szczególnie groźne, gdy jedna z tras jest zależna od tej drugiej (np.
+stanowi tunel prowadzony po drugiej trasie). Wówczas może nastąpić
+oscylacja w wyborze trasy (gdy trasa zależna jest lepsza).
+
+- Liczenie do nieskończoności – występuje gdy (podobnie jak w
+poprzednim przypadku) istnieje wiele tras pomiędzy dwoma ruterami, a
+dodatkowo jeden z nich utracił kontakt z jeszcze inną siecią (nie leżącą
+na tych trasach). Wówczas nieaktualna już choć ciągle przez rutery
+posiadana informacja o tej sieci jest propagowana dalej w pętli - z
+ciągłym zwiększaniem wartości metryki odległości
+
+- Środki zaradcze wobec zliczania do nieskończoności:
+
+    - Wprowadzenie limitu odległości (np. maksymalnej liczby skoków)
+    
+    - Wprowadzenie licznika hold-down (wstrzymanie zmian na temat
+    danej sieci po utracie kontaktu z nią przez określony czas)
+    
+    - Metoda Split Horizon (blokada ogłaszania wstecznego) polega na
+    blokowaniu możliwości przekazania informacji o trasie do rutera, od
+    którego ta informacja pierwotnie pochodzi (brak możliwości „uczenia
+    nauczyciela”). Ważniejsze techniki Split Horizon:
+
+        - Proste dzielenie horyzontu (Simple Split Horizon) – nie wysyła się
+        informacji przez interfejs, z przez który wcześniej została ona
+        otrzymana lub do rutera, z którego przyszła
+        
+        - Dzielenie horyzontu z zatruwaniem wstecznym (Split Horizon
+        With Poisoned Reverse) - trasy nie są pomijane, lecz wysyłane z
+        metryką „nieskończoność” lub większą niż dopuszczona w danej
+        technologii – co oznacza nieosiągalność sieci docelowej
+
+## RIP
+
+- RIP - Routing Information Protocol
+
+- Procesy RIP w ruterach realizują następującą funkcjonalność:
+    
+    - Żądają aktualnych informacji o routingu od innych routerów i na
+    ich podstawie aktualizują tablice routingu.
+    
+    - Odpowiadają na podobne żądanie innych routerów.
+    
+    - W ściśle określonych przedziałach czasu (domyślnie: 30 sekund)
+    rozsyłają informacje o swojej obecności, informując inne routery
+    o aktualnej konfiguracji połączeń międzysieciowych.
+    
+    - W przypadku wykrycia zmian w konfiguracji sieci rozsyłają
+    stosowną informację.
+
+- RIP wykorzystuje protokół UDP i numer portu 520 by wymieniać
+wiadomości między rout
+
+### Cechy
+
+- Administrative distance dla RIP: 120
+
+- Dwa warianty funkcjonowania:
+    
+    - Klasowy (Classfull) – RIP w wersji 1
+    
+    - Bezklasowy (Classless) – RIP w wersji 2
+
+- Rozgłaszanie następuje tylko do ruterów sąsiednich – w
+konsekwencji bardzo duże opóźnienia w propagacji informacji (tzw.
+wolny czas konwergencji - długi czas osiągania zbieżności)
+
+- Bardzo prosta metryka – tylko liczba przeskoków
+
+- Problemy z redystrybucją informacji o trasach do RIP – konieczna
+konwersja metryki do akceptowalnej w RIP. Przeważnie w ruterze,
+który dokonuje redystrybucji, wartość metryki dla tras dołączanych
+do bazy RIP jest narzucana konfiguracją
+
+- RIP stosuje technikę Distance-vector. Optymalizuje wybór trasy przy
+kryterium najmniejszej liczby skoków przez rutery (hops) niezbędnych
+do osiągnięcia miejsca przeznaczenia lub pod kątem kosztu ścieżki
+prowadzącej do miejsca przeznaczenia.
+
+- Ruter wysyła komunikaty RIP uaktualniające do sąsiadów - w
+określonych, stałych przedziałach czasu (30 sekund) lub w
+przypadku pojawienia się zmian w topologii sieci w segmentach
+bezpośrednio podłączonych (triggered update, w wersji 2 RIP).
+
+- Ruter, po przyjęciu uaktualnienia rutowania (które dotyczy zmian
+odległej sieci) uaktualnia tablicę rutowania. Wartość miary
+przypisanej danej odległej sieci docelowej wzrasta o jeden (jako
+następny skok jest wskazany nadawca komunikatu RIP).
+
+- Routery RIP utrzymują tylko kierunek najlepszej trasy (do miejsca
+przeznaczenia) - czyli trasę z najmniejszą liczbą skoków.
+
+- Liczba skoków jest ograniczona do 15 (zapobieganie pętlom).
+
+### RIPv2, RIPng
+
+- Druga wersja protokołu RIP (RIPv2 to nazwa oficjalna). Ulepszenia:
+    
+    - Transmisje multicast - RIPv2 może wysyłać między routerami RIPv2
+    wiadomości multicast pod adres 224.0.0.9 zamiast poprzez tzw.
+    pseudo-broadcast IP, gdzie adres docelowy wynosi 255.255.255.255
+
+    - Możliwość określenia w pakiecie RIP maski sieci dla dowolnej zdalnej
+    sieci IP, o której pakiet ten informuje (wsparcie dla VLSM, Variable
+    Length Subnet Mask)
+
+    - Technologia „Next Hop” - możliwe jest tu rozgłoszenie dalej innego
+    niż lokalny adresu następnego skoku - maskując w ten sposób tzw.
+    cichy router, czyli ruter nie używający RIP (np. rutujący statycznie).
+    Przez ten ruter będzie przechodził ruch do dalszych segmentów sieci
+    znów używającej RIP
+    
+    - Dodanie możliwości szyfrowania (MD5) przy wzajemnej identyfikacji
+    (autentyfikacji) routerów
+
+- RIPng (RIP next generation) to wariant RIP dla obsługi IPv6
+
+## Problem maski przy rutowaniu dynamicznym – VLSM
+
+- VLSM - Variable Length Subnet Mask – zakłada rozszerzenie
+funkcjonalności niektórych protokołów rutowania dynamicznego,
+polegające na uwzględnieniu różnej wielkości maski podsieci.
+
+- W konsekwencji zakłada konieczność przekazywania informacji o masce
+odległej sieci pomiędzy ruterami (tym samym - informacji o wielkości
+podsieci wyrażonej treścią maski)
+
+- Umożliwia w konsekwencji zastosowanie CIDR w rutowaniu (nie bazuje
+się wtedy na masce o długości wymuszonej klasą adresu IP lecz
+definiuje dowolne maski i przekazuje je razem z informacją o sieci)
+
+- Przykładowe protokoły rutowania dynamicznego wspierające VLSM to
+EIGRP, RIPv2, OSPF
+
+- Możliwość kontrolowania procesu automatycznej generalizacji w
+protokole rutowania (konfigurowalna cecha auto-summary, powodująca
+iż przekazywana informacja o masce sieci korygowana do zgodnej z
+klasą adresu IP tej sieci)
+
+## IGRP
+
+- IGRP - Interior Gateway Routing Protocol
+
+- Umożliwia sterowanie ruchem na podstawie zadanych parametrów
+mediów, takich jak przepustowość łącza, niezawodność, długość
+pakietów w trybie automatycznym
+
+- IGRP stosuje technikę Distance-vector. Oblicza dla trasy 24 bitową
+metrykę odległości, bazując na ocenie trasy (cost to destination)
+
+- Marszruta w przekazywaniu informacji o trasach między routerami -
+przekaz co 90 sekund (IP multicast 224.0.0.10)
+
+- Nieodebranie przekazu przez trzy kolejne okresy (270 sekund)
+powoduje, że ruter unieważnia daną trasę, po kolejnych siedmiu
+(630 sekund) – ruter odczekuje jeszcze dodatkowe 10 sekund i
+usuwa trasę z tablicy rutowania
+
+- IGRP jest klasowy (nie wspiera VLSM)
+
+### Obliczanie metryk
+
+![alt text](image-23.png)
+
+### IGRP a EIGRP
+
+- Wariant EIGRP (Enhanced Interior Gateway Routing Protocol):
+    
+    - Jest bezklasowy (wspiera VLSM), limituje topologię do 50 routerów
+    
+    - Używa płaskiej struktury sieci z podziałem na systemy
+    autonomiczne
+    
+    - Rozgłasza wiedzę opcjonalnie z użyciem IP multicast 224.0.0.10
+    (jak w IGRP) lub unicast (gdy jawnie określono sąsiadów)
+    
+    - Używa bardziej złożonej (32 bitowej) metryki oceny jakości łącza,
+    lecz także bazującej na analizie parametrów określających
+    opóźnienie międzysieciowe, przepustowość, obciążenie i
+    niezawodność łącza
+    
+    - Używa zastrzeżonych algorytmów obliczania trasy (zamiast Open
+    Shortest Path First), w tym algorytmu DUAL (Diffusing Update
+    Algorithm). Umożliwia on rozpoznanie i odrzucenie tras
+    zapętlonych oraz pozwala na znalezienie alternatywnych tras bez
+    czekania na aktualizacje pochodzące od innych
+
+## EIGRP
+
+- Dane przechowywane przez proces EIGRP:
+
+- Tablica sąsiadów - sąsiadujące rutery EIGRP
+
+- Tablica topologii - trasy rozgłaszane przez sąsiednie routery EIGRP
+
+- Tablica rutowania EIGRP - informacje o najlepszych trasach do
+znanych miejsc docelowych
+
+- Klasyfikacja tras EIGRP:
+
+    - Pod kątem statusu:
+
+        - Trasa podstawowa
+        
+        - Trasa zastępcza (FS, Feasible Successor Route) - zapasowa
+
+    - Pod kątem pochodzenia:
+
+        - Trasa wewnętrzna – informacje o niej pochodzą z systemu
+        autonomicznego i jednocześnie z EIGRP
+        
+        - Trasa zewnętrzna – informacje o niej pochodzą z innego
+        protokołu, rutowania statycznego lub spoza AS
+
+## OSPF
+
+- OSPF - Open Shortest Path First, protokół stosuje technikę linkstate
+
+- Bazuje na algorytmie Dijkstry poszukiwania najkrótszej ścieżki w
+grafie
+
+- Możliwość wprowadzenia obszarów sieci (net area) pozwalających
+na hierarchizację sieci w ramach domeny
+
+- Fazy działania po uruchomieniu:
+    
+    - Budowa tablic sąsiadów, na podstawie wysyłanych zwrotnych
+    pakietów typu „Hello”
+    
+    - Dzielenie się informacją - poprzez wzajemne rozgłaszanie treści
+    tablic (IP multicast 224.0.0.5, 224.0.0.6 lub unicast)
+    
+    - Typowanie najlepszych tras - na bazie algorytmu OSPF i
+    wartości metryk kosztu (poprzez przeszukiwanie w głąb
+    posiadanego grafu)
+
+- Jest wewnętrznym protokołem rutowania (Interior Gateway Protocol
+IGP). Przesyła dane pomiędzy ruterami należącymi do tej samej domeny
+(domain) OSPF – w konsekwencji obszar pracy OSPF nazywamy domeną
+OSPF (znajduje się ona wewnątrz Systemu Autonomicznego, czasem
+pokrywa go w całości). W domenie może istnieć max. 500 węzłów
+
+- Jeżeli istnieje kilka tras do jednego punktu przeznaczenia to OSPF
+generuje wiedzę umożliwiającą rozprowadzenie ruchu IP po wszystkich
+trasach równomiernie
+
+- Ruter OSPF w trybie ciągłym buduje drzewo najkrótszych tras do
+wszystkie innych ruterów (i w sieci z nimi połączonych w ramach
+domeny OSPF). Nie każdy ruter posiada komplet informacji (w OSPF
+wyróżniamy strefy – area, ograniczające obszar propagacji informacji)
+
+- Uczestnicy wymiany informacji w ramach protokołu OSPF są
+kontrolowani - tylko autoryzowane routery uczestniczą w budowie
+drzewa
+
+### Obszary
+
+- Każdy obszar (area) OSPF musi być podłączony do area 0. Wyjątek
+stanowi sytuacja, w której zdefiniowano tzw. Virtual Link pomiędzy
+obszarami
+
+- Istnieją identyfikatory liczbowe area podawane do konfiguracji
+urządzeń. Często mają one notację analogiczną do IPv4: X.X.X.X .
+Wtedy area 0 będzie miał ID = 0.0.0.0 (uwaga na ewentualne
+pomyłki z adresacją IP interfejsów!)
+
+- VC - Virtual Link (Circuit) - zdefiniowana sztucznie ścieżka
+rozgłaszania komunikatów OSPF (najczęściej biegnąca przez kilka
+area) – umożliwia tunelowanie komunikacji prowadzonej pomiędzy
+ABR i dzięki temu - podłączenie obszaru nie kontaktującego się
+bezpośrednio z area 
+
+### Trasy
+
+- Trasa lokalna (local) – prowadzi pomiędzy ruterami zlokalizowanymi
+tym samym obszarze (area) OSPF
+
+- Trasa internal – opisuje dojście z jednego obszaru (area) OSPF do
+innego obszaru OSPF. Zawiera uogólnioną informację o sieciach IP
+w zdalnym obszarze OSPF. Prowadzi przez Ruter ABR.
+
+- Trasa external – prowadzi poza domenę OSPF (do innego Systemu
+Autonomicznego zarządzanego przez protokół BGP) lub prowadzi do
+innej domeny OSPF. Prowadzi przez ruter ASBR
+
+### Rodzaje AREA
+
+- Standard area – normalny obszar oddzielany od innych ruterami
+ABR. Ruter w tym obszarze otrzymuje informację o lokalnych
+trasach (komunikaty LSA 2) od innych ruterów w area
+(wewnętrznych – Internal Router), o trasach internal (do innych
+area) – od ABR (komunikaty LSA 3 z Area 0) oraz o trasach external
+(komunikaty LSA 5).
+
+- Backbone area (Area 0) – wyróżniony szkielet domeny OSPF. Jest
+obowiązkowa, w domenie OSPF może istnieć tylko jedna area 0.
+Area 0 także zawiera wiele ruterów OSPF i funkcjonuje normalnie
+
+- Stub area – nie otrzymuje informacji o trasach external. Treść
+komunikatu LSA 5 jest przed wysłaniem do Stub area konwertowana
+przez ABR na adres domyślnej bramki. Stub area nie wysyła także
+informacji o sieciach zewnętrznych względem domeny OSPF (nie
+interpretuje posiadania rutera ASBR). Ruter w Stub area akceptuje
+tylko LSA 1,2,3.
+
+- Totally stub (Totally stubby) – obszar wyizolowany, gdzie ruter
+akceptuje wyłącznie LSA 1,2 – czyli nie posiada tras generalizowanych
+(no summary) z innych area, jedynie informacje o trasach do
+lokalnych sieci i adres domyślnej bramki przysłany przez ABR
+
+- Not-so-stubby area (NSSA) – obszar otrzymuje informacje o sieciach
+spoza domeny OSPF, wysyła je dalej (do innego ABR), ale nie
+otrzymuje informacji od innych area OSPF. Umożliwia to podłączenie
+ASBR do Stub area i przekazywanie wiedzy o trasach.
+
+### Rodzaje komunikatów
+
+- Hello – używany do identyfikacji sąsiadów i obsługi ruchu technicznego
+(nie wiązanego z wymianą wiedzy o trasach)
+
+- Link State Advertisement (także: Link State Update) – komunikat o
+trasie, opisany rosnącym numerem sekwencji oraz kosztem. Wysyłany
+periodycznie oraz dodatkowo po utracie lub odzyskaniu jakiegokolwiek
+łącza
+
+- Link State Ack – potwierdzenie komunikatu Link State Update
+
+- Database Description – seria numerów sekwencji wszystkich
+komunikatów aktualnie posiadanych w bazie danych (pozwala sprawdzić
+ich aktualność i sprawnie zsynchronizować bazę danych). Komunikat
+stosowany po uruchomieniu łącza, przez które jest wysyłany.
+
+- Link State Request – używany jako żądanie przesłania informacji z
+określonym numerem sekwencji, wysyłany głównie w konsekwencji
+otrzymania Database Description wskazującego na posiadanie przez inny
+ruter bardziej aktualnych informacji
+
+### Rodzaje LSA
+
+- LSA - Link State Advertisements - komunikaty wysoko-poziomowe
+rozgłaszane prze rutery OSPF w obrębie domeny OSPF
+
+- 6 głównych typów komunikatów LSA:
+
+    - Type 1 - reprezentuje inny ruter, który sąsiaduje z adresatem w
+    tym samym obszarze OSPF
+    
+    - Type 2 - reprezentuje tzw. pseudonodes (listę ruterów
+    przyłączonych do sieci), rozsyłany w obrębie area opisuje trasy
+    tam wykryte (trasy lokalne)
+    
+    - Type 3 - reprezentuje tzw. Network link summary (trasa
+    zbiorcza do obszaru OSPF), rozsyłany przez rutery brzegowe
+    obszarów (ABR). Opisuje trasy do innych obszarów (area), ale
+    wewnątrz systemu autonomicznego i domeny OSPF (trasy
+    internal). Domena OSPF to obszar działania OSPF - jest zawarta
+    w obszarze autonomicznym.
+
+- Trzy pozostałe typy komunikatów LSA:
+
+    - Type 4 – reprezentuje ruter ASBR (czyli informuje o wyjściu z
+    domeny OSPF). Rozsyłany przez rutery brzegowe dla obszaru
+    (ABR). Jest propagowany do całego obszaru (area).
+    
+    - Type 5 – reprezentuje trasę prowadzącą poza domenę OSPF
+    (trasę external) – uzyskaną przez inne niż OSPF protokoły
+    rutowania. Rozsyłany do domeny przez rutery brzegowe dla
+    domeny (czyli ASBR). Komunikat ten, wchodząc do domeny
+    OSPF jest propagowany do wszystkich ABR i dalej do area w
+    całej domenie OSPF. Wyjątek stanowi tu stub area.
+
+    - Type 7 – używany w obszarze NSSA zamiast typu 5 LSA
+    (następuje konwersja treści komunikatu na granicy NSSA do
+    typu 5). Konieczny do przekazania informacji do ABR o trasach
+    zewnętrznych względem NSSA, gdy te przyszły do NSSA z sieci
+    nie objętych OSPF.
+
+### Podsumowanie terminologii
+
+- ABR - Area Border Router - ruter łączący dwa obszary (area) wewnątrz
+domeny OSPF
+
+- ASBR - Autonomous System Border Router lub Autonomous System
+Boundary Router - ruter prowadzający ruch poza domenę OSPF (do
+innego protokołu rutowania dymanicznego lub innej domeny OSPF)
+
+- Backbone router – ruten OSPF nie będący ruterem ABR lub ASBR i
+znajdujący się wewnątrz Area 0 (backbone)
+
+- Internal router – ruten OSPF nie będący ruterem ABR lub ASBR i
+znajdujący się wewnątrz Area innej niż backbone
+
+- Gdy dwa rutery OSPF wymieniają między sobą informację o trasach,
+nazywamy je adjacentnymi
+
+- Standard area – zbiór sieci IP łączonych ruterami. Zakres propagowania
+informacji o trasach jest do niej ograniczany, zaś ABR generalizuje te
+informacje i przekazuje do innych area
+
+- Backbone area - główny obszar (area) domeny OSPF (numer 0) -
+definiowany obowiązkowo w OSPF. Backbone Router - ruter w Area 0
+
+- Stub area i jej warianty - obszar nie będący Area 0 i mający tylko jeden
+ABR lub ASBR (jedno wyjście), co nie wymaga propagowania pełnej
+informacji o domenie OSPF
+
+- Equal Cost MultiPath (ECMP) – konstrukcja OSPF balansująca ruch
+sieciowy proporcjonalnie pomiędzy wieloma ścieżkami, gdy ich koszty są
+identyczne.
+
+- LSA - Link State Advertisement - komunikat ogłoszenia OSPF wysyłany
+przez rutery OSPF (istnieje 6 typów podstawowych), łącznie 11 typów
+
+### OSPF – zachowanie w różnych wariantach sieci 
+
+- W zależności od typu sieci i funkcjonalności udostępnionej przez
+warstwę drugą ISO OSI, zachowanie OSPF oraz reguły jego
+konfigurowania są odmienne. Generalny podział wygląda następująco:
+    
+    - Point-to-point - DR i BDR nie są potrzebne (nie ma sensu ich
+    wybierać gdyż istnieją tylko dwa rutery OSPF w segmencie sieci).
+    Rutery OSPF automatycznie identyfikują się jako sąsiedzi i
+    nawiązują połączenia. Do komunikacji nadal użytkowany jest adres
+    IP multicast 224.0.0.5
+    
+    - Point-to-multipoint - sieć składa się z wielu par Point-to-point,
+    gdzie każda ma jeden węzeł wspólny z innymi (ten sam). Zasady
+    konfigurowania są analogiczne jak poprzednio, lecz adresy innych
+    ruterów OSPF należy podać w konfiguracji (gdyż nie ma możliwości
+    automatycznego wykrycia ruterów)
+
+    - NBMA (Non Broadcast Multiple Access) - sieć zbudowana w
+    warstwie drugiej z wielu łącz Point-to-point (np. sieć Framerelay). Z uwagi na brak możliwości rozgłaszania - tu także
+    konieczne jest manualne konfigurowanie adresów innych
+    ruterów OSPF (neighbors). Występują dwa istotne warianty
+    takiej sieci:
+        
+        - Full-mesh – gdy udostępniono połączenie „każdy z każdym”
+        – wówczas położenie DR i BDR jest dowolne
+        
+        - Hub-and-spoke – gdy istnieje jeden wyróżniony węzeł,
+        komunikujący jakiekolwiek inne. W tym przypadku ten
+        właśnie węzeł (ruter OSPF) powinien otrzymać rolę DR
+        (należy to wymusić przy użyciu parametru priority)
+    ִ
+    -Multiple Access – sieć z możliwością rozgłaszania (np. Ethernet)
+    – obowiązuje standardowa procedura konfigurowania OSPF (DR
+    i neighbors ustanawiane są automatycznie)
+
+- Różne konfiguracje topologii sieci, do której podłączony jest interfejs
+rutera (broadcast, non-broadcast, point-to-multipoint, point-to-point) –
+można korygować, lecz za wyjątkiem point-to-multipoint typ sieci
+ustalany jest automatycznie:
+Router (config-if)#ip ospf network point-to-multipoint
+
+- Uwaga: zależnie od rodzaju skonfigurowanej w OSPF sieci stosowane są
+różne domyślne interwały czasowe dla pakietów Hello:
+ִ10 sekund dla hello, 40 sekund dead timer w przypadku sieci
+Multiple Access
+ִ30 sekund dla hello, 120 sekund dead timer w przypadku sieci Pointto-point, NBMA, Point-to-multipoint
+Konieczne jest wymuszenie identycznych wartości dla całej sieci OSPF
+w przypadku niezgodności:
+Router (config-if)#ip ospf hello-interval 15
+Router (config-if)#ip ospf dead-interval 
+
+### Metryki
+
+![alt text](image-24.png)
+
+### Stany połączen w OSPF
+
+- Analizowane podczas prowadzenia czynności diagnostycznych:
+Router#show ip ospf neighbors
+Router#debug ip ospf event
+
+- Kolejne stany połączenia to:
+
+- Down – właśnie zakończono, lub nie rozpoczęto jeszcze komunikacji
+
+- Attempt – wysłano Hello do rutera określonego komenda neighbor (np.
+w przypadku sieci NBMA), oczekiwanie na odpowiedź
+
+- Init – przyszedł pakiet Hello od innego rutera, ale nie jest to odpowiedź
+
+- 2-way – przyszła odpowiedź na pakiet Hello wysłany wcześniej
+
+- Exstart – trwa procedura ustalania DR i BDR (nowy ruter włącza się do
+sieci)
+
+- Exchange + Loading – trwa procedura wymiany bazy wiedzy o ścieżkach
+OSPF
+
+- Full – bazy danych o ścieżkach są zsynchronizowane, adjacencja.
+
+## IS-IS
+
+- IS-IS - Intermediate System to Intermediate System
+
+- Typ: Interior Gateway Protocol, link-state
+
+- Alternatywa dla OSPF
+
+- Jest użytkowany głównie przez dużych operatorów usług
+internetowych
+
+- Buduje drzewo najlepszych ścieżek z punktu widzenia każdego z
+zaangażowanych ruterów
+
+-Wprowadza hierarchię: obszary (area) podobnie jak OSPF, lecz
+tylko w dwóch kategoriach. Area posiadają liczbowe identyfikatory
+(24-bitowe)
+
+- Nie operuje tylko nad IPv4 dlatego, więc jest adaptowalny dla
+wsparcia IPv6 (nie trzeba wprowadzać nowych wersji, jak w
+przypadku OSPF)
+
+- Dwie klasy obszarów (przypisane do ruterów, które tworząc
+topologię w tej samej klasie budują odpowiedniki area z OSPF):
+    
+    - Level 1, intra-area (traktowany jako backbone szkieletu sieci
+    objętej protokołem, lecz formalnie IS-IS nie wymaga obszaru
+    bazowego - odpowiednika OSPF area 0). Rutery Level 1
+    komunikują się tylko z innymi ruterami Level 1.
+    
+    - Level 2 inter-area. Rutery Level 2 komunikują się tylko z
+    ruterami Level 2
+    
+    - Występują także rutery Level 1+2 – tylko one mogą się łączyć z
+    Level 1 i z Level 2. Komunikują rutery inter-area i intra-area
+
+- Uwaga: w IS-IS granice obszarów przebiegają POMIĘDZY
+RUTERAMI (w OSPF – PRZEZ RUTERY ABR). Nie przypisujemy
+zatem różnych area do interfejsów tego samego rutera. Zamiast
+tego rutery trzymają zamiennie dwie wersje bazy tras: ISIS Level-1
+Link State Database, ISIS Level-2 Link State Database
+
+### Adresacja IS-IS
+
+- Komponenty adresu net 49.3456.2002.0020.0001.00 z
+poprzedniego przykładu w sieciach rozległych będzą przybierały
+następujące znaczenie:
+    
+    - Pierwszy bajt (49) będzie określał rodzinę adresów (AFI –
+    Address Family Identifier) używanych do identyfikacji hostów
+    biorących udział w procesie rutowania IS-IS (kolor zielony). W
+    przypadku IPv4 musi mieć właśnie wartość 49
+    
+    - Dwa następne bajty (3456) to identyfikator area w IS-IS
+    
+    - Sześć kolejnych bajtów to adres pobrany z unikatowego adresu
+    rutera (np. IP)
+    
+    - Ostatni bajt to tzw. NSEL (NET Selector) – w przypadku IS-IS
+    musi on mieć wartość 0
+
+## ODR
+
+- ODR – On Demand Routing
+
+- Rozwiązanie Cisco bazujące na protokole CDP (Cisco Discovery
+Protocol), udostępniające uproszczone i szybkie do konfigurowania
+rutowanie IP
+
+- Umożliwia szybką lokalizację przez rutery wyjścia z sieci korporacyjnej
+oraz pozwala na automatyczną propagację informacji o sieciach
+bezpośrednio dołączonych.
+
+- Architektura: jeden ruter centralny (tzw. ODR-HUB) i wiele ruterówklientów
+
+- Zasada działania:
+ִWraz z komunikatem CDP klienci przekazują do ODR-HUB informacje
+o swoich sieciach bezpośrednio podłączonych
+ִODR-HUB przekazuje w komunikatach CDP klientom informacje o
+sobie, jako domyślnej bramce (co wystarcza, żeby wszystkie rutery
+ODR miały możliwość wysyłania datagramów między sobą)
+
+## Tunele dla systemów rutujących
+
+- Gdy istnieje konieczność zbudowania rozproszonego systemu
+rutowania dynamicznego IP (na przykład rozlokowanego w wielu
+budynkach połączonych przez Internet) możliwe jest zastosowanie
+tunelowania (tunelling).
+
+- Istnieje możliwość szyfrowania danych przesyłanych przez tunel
+
+- Tunele GRE (General Routing Encapsulation) są realizowane są
+użyciem specjalnych interfejsów wirtualnych (o nazwie Tunnel).
+
+- Technologia opracowana przez Cisco
+
+- Tunele wspierają funkcjonalność warstwy trzeciej ISO OSI (więc
+zakończenia tunelu posiadają adresy IP).
+
+- Tunel może być prowadzony przez inne rutery (najczęściej w
+Internecie) aż do swojego przeciwległego końca (na przykład w
+innym budynku).
+
+- Zakończenia tunelu posiadają własne adresy IP
+
+- Konieczne jest udrożnienie rutowania IP pomiędzy zakończeniami
+tunelu
+
+- Tunel tworzony jest z użyciem dodatkowej enkapsulacji. W
+datagramie IP zamieszczany jest nagłówek GRE (kod protokołu 47)
+
+- Inne zastosowania tuneli:
+
+    - Łączenie zdalnych sieci stosujących protokoły inne niż IP
+    
+    - Przesyłanie ruchu IPv6 poprzez sieć IPv4
+    
+    - Przesyłanie szyfrowanego ruchu multicast pomiędzy odległymi
+    ruterami (ruch multicast nie jest wspierany przez IPSec, lecz
+    istnieje możliwość przekazania ruchu multicast do tunelu, który
+    będzie szyfrowany jako łącze punkt)
+
+## Transmisje multicast w sieciach IP
+
+- Większość z istniejących protokołów, które wykorzystują multicast,
+działają na szczycie protokołu UDP (multicast nie jest mechanizmem
+zorientowanym połączeniowo)
+
+- Tworzone są tzw. grupy rutowania multicast, do których klasyfikowane
+są hosty zainteresowane odbiorem strumienia multicast
+
+- Aby stacja (oraz aplikacja na niej uruchomiona) mogła być odbiorcą
+danej grupy – musi zarejestrować się jako taki odbiorca na bezpośrednio
+podłączonym ruterze. Stosuje w tym celu protokół IGMP (Internet Group
+Management Protocol). Ruter sprawdza, które jego interfejsy prowadzą
+do zarejestrowanych odbiorców – i przez te rozsyła datagramy
+
+- Ruch multicast jest w ruterze rozpatrywany jako ruch wysyłany – więc w
+przeciwieństwie do unicast (gdzie o celu decydował adres odbiorcy) – w
+multicast adres NADAWCY jest podstawą rutowania. W takim przypadku
+funkcjonuje określenie „Reverse path forwarding” - transmisja danych
+zestawiana w kierunku „od celu do źródła”
+
+## Adresy IP Multicast
+
+![alt text](image-25.png)
+
+![alt text](image-26.png)
+
+![alt text](image-27.png)
+
+## IGMP i MLD
+
+- IGMP (Internet Group Management Protocol)
+
+- Protokół kontrolujący multicast dla sieci IPv4.
+Wersje: IGMPv1, IGMPv2 i IGMPv3.
+
+- Prosty system komunikatów (przykład dla IGMPv2): „Membership
+Query”, „Membership Report”, „Leave Group”
+
+- W IGMPv3 dodano do każdej grupy multicast dodatkowe filtry źródeł
+w tej grupie (oraz komendy include i exclude). Możliwe jest od teraz
+blokowanie źródeł z użyciem IGMP.
+
+- MLD (Multicast Listener Discovery)
+
+- Protokół kontrolujący multicast dla sieci IPv6.
+ִWersje: MLDv1, MLDv2
+
+- Działa analogicznie jak IGMP (konkretnie: MLDv1 jest
+odpowiednikiem IGMPv2, MLDv2 jest odpowiednikiem IGMPv3).
+
+- Protokół jest częścią ICMPv6 (nie jest specyfikowany indywidualnie)
+
+### IGMP - zarządzanie grupami
+
+- Zgłoszenie się hosta do grupy multicast – komunikatem
+Membership Report wysyłanym do rutera
+
+- Ruter (pełniąc funkcję Querier) może odpytywać hosty wysyłając
+komunikat Membership Query. Gdy nie odpytuje – pracuje w trybie
+Non-Querier.
+
+- Host powtarza komunikat zgłoszenia z interwałem losowym z
+przedziału 0..MaxRespTime po każdorazowym otrzymaniu żądania
+od rutera. Zgłoszenie dotyczy GRUPY multicast, nie konkretnego
+hosta i znaczy, że w segmencie sieci jest odbiorca danych
+klasyfikowanych w tej grupie multicast.
+
+- W segmencie sieci może (i powinien) być tylko jeden ruter pełniący
+funkcję Querier. Gdy komunikaty Membership Query przestaną być
+nadawane – inny ruter (jeśli jest) przechodzi ze stanu Non-Querier
+do Querier i rozpoczyna odpytywanie.
+
+- Dla każdej grupy multicast ruter utrzymuje licznik jej aktualności
+(domyślnie: 260 sekund). Gdy nie otrzymuje Membership Report
+od żadnego z hostów (członków danej grupy multicast) – usuwa ją.
+
+- Host także sprawdza Membership Report dotyczące grup, do
+których przynależy (nadawane przez inne hosty). Gdy chce opuścić
+grupę jako ostatni (wie to) – wysyła komunikat Leave Group. Jeśli
+nie jest ostatni i opuszcza – nic nie musi robić.
+
+- IGMP operuje tylko w lokalnym segmencie sieci (służy tylko do
+rejestrowania grup multicast w ruterze-bramce dla multicast). Ruch
+na trasie od hosta-serwera strumienia multicast do rutera jest
+organizowany z pomocą protokołów rutowania multicast.
+
+### IGMP Snooping
+
+- Przełączniki nie ingerujące w adresację multicast rozsyłają ramki
+multicast do wszystkich odbiorców (na wszystkie aktywne porty) –
+co obciąża hosty koniecznością rozpatrywania treści tych ramek
+
+- Niektóre przełączniki posiadają funkcję IGMP snooping – polegającą
+na wyłapywaniu raportów rejestracji w grupie multicast (IGMP
+Report) i następnie używaniu zgromadzonej w ten sposób
+informacji do przekazywania ramek multicast tylko do właściwych
+portów. Alternatywnie – w IGMPv3 pakiety IGMP Report są
+dodatkowo wysyłane pod dedykowany adres IP: 224.0.0.22
+(przełącznik może z nich korzystać)
+
+- W innym wariancie funkcjonowania przełączników możliwe jest
+symulowanie komunikacji IGMP przez te przełączniki – w celu
+całkowitego przejęcia procesu rejestrowania w grupie multicast i
+następnie zarządzania ruchem multicast przez przełącznik (ruter
+otrzymuje zgłoszenia IGMP zbiorczo od przełącznika)
+
+## Adresy specjalne IP multicast
+
+![alt text](image-28.png)
+
+### Protokoły rutujące IP multicast - Interior
+
+- PIM – Protocol Independent Multicast – korzysta z innych
+protokołów do pozyskiwania tras. Buduje struktury opisujące ścieżki
+IP multicast w kilku trybach:
+    
+    - PIM Sparse Mode (PIM-SM lub PIM pull-mode) – buduje drzewa
+    odbiorców dla każdej grupy, opcjonalnie także wybiera shortest
+    path. Różnica względem Dense Mode: odbiorca (ruter) musi
+    czynnie wysłać żądanie zarejestrowania go jako potencjalnego
+    odbiorcy multicast.
+    Robi to w specjalnym ruterze o nazwie Rendezvous Point
+    (RP)
+
+W efekcie zmniejszony jest narzut na komunikację (strumienie
+IP multicast nie są rozgłaszane niepotrzebnie), może jednak
+powodować opóźnienia/braki w pokryciu sieci.
+
+- Tryby PIM – ciąg dalszy:
+    
+    - PIM Dense Mode (PIM-DM lub PIM push-mode) – buduje pełne
+    drzewa dla każdej grupy, potem usuwa te gałęzie, gdzie nie mają
+    odbiorców. Różnica względem Sparse Mode: każdy ruter dostaje
+    ruch IP Multicast, chyba ze czynnie zabroni wysyłania do niego
+    takiego ruchu (wyśle komunikat prune , informujący, że nie jest
+    zainteresowany dalszym otrzymywaniem strumienia IP multicast
+    danej grupy)
+    
+    - PIM Sparse-Dense Mode - RP poszukiwany jest automatycznie
+    (funkcjonalność autoRP) przez rutery PIM. Rutery PIM kandydujące
+    do roli RP zgłaszają się do Mapping agenta - specjalnego rutera PIM,
+    będącego arbitrem wybierającym RP. On rozsyła informacje o RP do
+    wszystkich ruterów PIM. Do tej komunikacji służy specjalna grupa IP
+    Multicast: 224.0.1.40 lub 224.0.1.49 pracująca w Dense Mode.
+    Pozostałe grupy – gdy udało się ustalić adres RP – pracują w Sparse
+    Mode
+
+- Tryby PIM – ciąg dalszy:
+    
+    - Bidirectional PIM – buduje drzewa dla ruchu dwukierunkowego.
+    W przypadku Cisco należy aktywować tryb jako rozszerzenie
+    wcześniejszych (budowane są wtedy ścieżki dla Multicast
+    prowadzące w obydwu kierunkach – do celu i do źródła):
+    Router(config)#ip pim bidir-enable
+    
+    - PIM Source-Specific Multicast (PIM-SSM) – rozbudowuje drzewo
+    w kierunku od hosta-nadawcy danego ruchu (a nie od
+    odbiorców). Uwzględnia nie tylko identyfikator grupy IP
+    multicast, w której nadaje źródło, ale także adres IP unicast
+    tego źródła. Odbiorcom daje możliwość wyboru źródła na
+    podstawie tego adresu – co jest istotne w sytuacji gdy wiele
+    źródeł koliduje w tej samej grupie IP multicast. Para
+    identyfikator IP multicast grupy + adres IP unicast źródła zwana
+    jest kanałem multicast (Multicast channel).
+
+## Drzewa rutowania IP multicast
+
+- Tablica rutowania IP multicast zawiera wpisy składające się na drzewa
+propagacji ruchu datagramów. W przypadku istnienia RP Dla każdej
+zarejestrowanej grupy istnieją dwa drzewa:
+    
+    - Shared tree – gdzie wpisy mają przykładowy kształt: (*, 239.1.1.1).
+    Drzewo to prowadzi do RP (przez Incoming interface) od odbiorców
+    ruchu Outgoing interfaces list w kolejnych ruterach.
+    
+    - Source tree – gdzie wpis dotyczy konkretnego hosta unicast
+    będącego źródłem datagramów: (200.200.200.1, 239.1.1.1). Drzewo
+    prowadzi do źródła (przez Incoming interface) od odbiorców ruchu
+    (Outgoing interfaces list)
+
+- Outgoing interface list w każdym wpisie może mieć wiele pozycji
+(datagramy są wtedy powielane). Gdy zawiera Null – ruter posiada
+jedynie informację o źródle (brak zarejestrowanych odbiorców)
+
+- Incoming interface dla Shared tree w przypadku RP zawierają Null (to
+jest właśnie ten ruter)
+
+## Protokoły rutujące IP
+
+- DVMRP - Distance Vector Multicast Routing Protocol
+ִDo wymiany datagramów używa protokołu IGMP
+
+- Funkcjonuje w Dense-mode
+
+- Funkcjonowanie: komunikaty Request/Response dotyczące trasy
+przesyłane między ruterami
+
+- Protokół ma możliwość tunelowania połączeń pomiędzy ruterami
+DVMRP przez inne rutery, nie wspierające tego protokołu
+
+- Protokół prowadzi optymalizację ruchu na bazie kosztów
+przeskoku, definiowanych jako liczba całkowita (metryka)
+przypisywana do urządzenia pośredniczącego w transmisji
+(rutera)
+
+- Bazuje na koncepcji RIP, ale zamiast tworzenia ścieżek z
+przeskokami w przód (next-hop) – buduje drzewa
+przeszukiwania do tyłu (tzw. previous-hop back to the source)
+
+- MOSPF – Multicast Extensions to OSPF
+
+- Rozszerzenie OSPF pozwalające ruterom na dzielenie się informacją o
+grupach multicast. Używa IGMP do pobierania informacji o grupach
+multicast.
+
+- Nie kataloguje informacji o trasach lecz pary: źródło, grupa odbiorców
+multicast. Na żądanie tworzone są drzewa shortest-path dla takich par.
+
+- MOSPF analogicznie do OSPF stosuje podział na AS (System
+autonomiczny, domenę OSPF) i AREA (obszar). W konsekwencji istnieje
+intra-area routing, inter-area routing, inter-domain routing MOSPF
+
+- Przetwarza dodatkowy rodzaj LSA – Group Membership LSA operujący
+na parze (źródło, grupa multicast)
+
+- ABR posiada dodatkowa funkcję: Inter-area Multicast Forwarder
+– wysyłają uogólnione informacje o grupach multicast z przyległych area
+do backbone area
+
+- Analogicznie postępują AS Boundary Routers (ASBRs), posiadając
+funkcję Inter-AS Multicast Forwarder
+
+- MBGP – Multiprotocol Extensions of BGP
+
+- Uniwersalny dla IPv4 i IPv6
+
+- Poza MPLS VPN pozwala na rozgłaszanie topologii ruterów
+obsługujących multicast (innej niż dla unicast). MBGP
+redystrybuuje trasy do PIM i MOSPF
+
+- Protokoły interior (opisane wcześniej) są także zaadaptowane do
+pracy pomiędzy systemami autonomicznymi, więc posiadają
+możliwość operowania jako Exterior
+
+### Przykład globalnej sieci multicast - mBone
+
+- mBone (multicast Backbone) jest siecią wirtualną IP multicast nad
+IP unicast
+
+- Tworzone są tzw. wyspy IP multicast (łączone tunelami nad siecią
+nie obsługującą IP multicast). Konieczne jest tu tunelowanie IPover-IP.
+
+- Obecnie mBone posiada kilka tysięcy wysp.
+
+- W ramach mBone użytkowany jest protokół DVMRP (z niewielkim,
+lokalnym wsparciem MOSPF)
+
+- Tunele tworzone w ramach mBone są często zestawiane przez
+dostawców internetu (dzięki nim można uporządkować ruch IP
+multicast jako konkretną usługę w konkretnym tunelu)
+
+## Mechanizmy wspierające procesy rutowania datagramów IP
+
+### Policy Based Routing
+
+- Możliwe jest definiowanie rozszerzonych kryteriów rutowania
+datagramów – wychodzących poza treść forwading table
+
+- W przypadku rutowania IP kryteria mogą być oparte na innej (niż
+adres IP) informacji zawartej w datagramach IP (QoS, długość
+datagramiu, flagi, inne pola adresowe itp.)
+
+- Mechanizmy wspomagające PBR: zastosowanie wielu alternatywnych
+tablic rutowania (np. w systemach operacyjnych Linux), wprowadzenie
+tzw. Route Maps definiujących reguły filtrowania i akcje podejmowane
+wobec dopasowanych do tych reguł datagramów
+
+- Możliwe jest manipulowanie informacją, która definiuje reguły
+dystrybucji ruchu IP w ruterze (np. wymiana adresu następnej bramki
+dla datagramu). W konsekwencji - można nawet określać reguły
+tworzenia tras przesyłanych pomiędzy ruterami w ramach protokołu
+rutowania dynamicznego - ingerując w treść informacji o tych trasach.
+
+### IP SLA
+
+- IP SLA (Service Level Agreement) to zestaw mechanizmów
+umożliwiających prowadzenie czynnego monitorowania infrastruktury
+wykorzystywanej w procesach rutowania IP oraz podejmowanie
+zaprogramowanych akcji po wykryciu określonego jej stanu
+
+- IP SLA może być także wykorzystywane do ciągłego pobierania
+informacji o stanie obciążenia sieci, prowadzenia analiz QoS i
+automatyzowania innych podobnych czynności.
+
+- Funkcjonalność IP SLA jest wbudowana w systemy operacyjne Cisco
+IOS - jej użycie nie wymaga dodatkowego sprzętu czy
+oprogramowania. Rejestrowana jest baza tzw. monitorów
+aktywowanych zgodnie z ustalonymi kryteriami czasowymi i dającymi
+automatycznie klasyfikowane wyniki pomiarów (co pozwala
+zaprogramować reakcje na otrzymanie określonej ich treści)
+
+### Rutery w trybie standby – HSRP, VRRP
+
+- Protokoły Cisco HSRP (Hot Standby Routing Protocol) i VRRP (Virtual
+Routing Redundancy Protocol) umożliwiają asekurowanie rutera
+innymi ruterami, oczekującymi w gotowości aby przejąć ruch w
+przypadku awarii tego pierwszego.
+
+- Zasada działania: Rutery są łączone w logiczną grupę o ustalonym
+numerze i współdzielą dodatkowy wirtualny adres IP (posiadając też
+dodatkowe wirtualne adresy MAC). Jeden z ruterów jest w stanie
+active i on aktualnie obsługuje wirtualny adres IP, odpowiadając na
+wszelki ruch z nim związany. Gdy ruter ten ulegnie awarii - adres
+wirtualny migruje do kolejnego rutera bez powodowania przerwy w
+ruchu.
+
 
 
 ---
@@ -2496,9 +3456,7 @@ jest wykorzystywane w protokole EGP.
 - **VTY (Virtual Terminal)** – wirtualne linie do zdalnego dostępu (SSH/Telnet)
 - **Tworzenie użytkownika:** `username <nazwa> password <hasło>`
 
----
-
-## STP (Spanning Tree Protocol)
+### STP (Spanning Tree Protocol)
 
 - **Unikatowość** – kluczowa cecha (unikalny Bridge ID)
 - **UDLD (Unidirectional Link Detection)** – wykrywanie jednokierunkowych łączy; tryby: *normal* i *aggressive*
@@ -2508,24 +3466,86 @@ jest wykorzystywane w protokole EGP.
 - **Traffic Scrambling** – technika eliminacji problemów z jednokierunkowością
 - **EtherChannel (LAG)** – agregacja łączy fizycznych w jedno logiczne
 
-## Wykład 3
+## Wykład 3 – Notatki
 
-Różnica miedzy port priority a cost
+### Port Priority vs Cost (STP)
 
-Dokłądna różnica między switch a router, router wyrzuca warstwe ethernet, patrzy na source, destination, patrzy na IP, Routing, tworzenie nowej ramki ethernet, ...
+**Port Priority**
+- Określa preferencję portu
+- Niższa wartość = lepszy port
+- Używana tylko gdy cost jest taki sam
 
-TTL - czym jest
+**Cost (Path Cost)**
+- Określa koszt ścieżki do root bridge
+- Zależny od przepustowości
+- Niższy = lepsza ścieżka
 
-Routing a bridging, bridging - logika działania
+**Różnica:**
+- Cost decyduje o trasie
+- Port Priority rozstrzyga remisy
 
-Interfejs L2, L3
+---
 
-Na nastęny lab potrzebne - mostkowanie routerów, mostki
+### Switch vs Router
 
-Przydatne komenda na zajecia - bridge-group 1
+**Switch (L2)**
+- Działa na MAC address
+- Przekazuje ramki
+- Nie usuwa nagłówka Ethernet
 
-Polecenie pool, network
+**Router (L3)**
+1. Usuwa nagłówek Ethernet
+2. Analizuje adresy IP
+3. Podejmuje decyzję routingową
+4. Tworzy nową ramkę Ethernet
 
-Rommon - polecenie
+---
 
-Polecenie no auto summary
+### TTL (Time To Live)
+
+- Pole w nagłówku IP
+- Każdy router zmniejsza TTL o 1
+- TTL = 0 → pakiet usuwany
+- Zapobiega pętlom
+
+---
+
+### Routing vs Bridging
+
+**Routing**
+- Warstwa 3 (IP)
+- Oddziela broadcast domains
+
+**Bridging**
+- Warstwa 2 (MAC)
+- Jedna domena broadcastowa
+
+**Logika Bridgingu:**
+- Learning (uczenie MAC)
+- Flooding (gdy nieznany MAC)
+- Forwarding
+- Filtering
+
+---
+
+### Interfejsy L2 vs L3
+
+**L2**
+- Brak IP
+- switchport
+
+**L3**
+- Ma IP
+- routing
+
+## Wykłąd 4
+
+Listy kontrolne - ACL
+
+Przykłady łącz szeregowych: SLIP - END/ESC - głónie
+
+Przykład użycia SLIP dla łącza async
+
+PPP
+
+SNMP
