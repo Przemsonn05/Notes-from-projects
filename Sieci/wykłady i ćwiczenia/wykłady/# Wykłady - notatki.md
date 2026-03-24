@@ -2507,3 +2507,25 @@ jest wykorzystywane w protokole EGP.
 - **Designated Port** – port wyznaczony na danym segmencie
 - **Traffic Scrambling** – technika eliminacji problemów z jednokierunkowością
 - **EtherChannel (LAG)** – agregacja łączy fizycznych w jedno logiczne
+
+## Wykład 3
+
+Różnica miedzy port priority a cost
+
+Dokłądna różnica między switch a router, router wyrzuca warstwe ethernet, patrzy na source, destination, patrzy na IP, Routing, tworzenie nowej ramki ethernet, ...
+
+TTL - czym jest
+
+Routing a bridging, bridging - logika działania
+
+Interfejs L2, L3
+
+Na nastęny lab potrzebne - mostkowanie routerów, mostki
+
+Przydatne komenda na zajecia - bridge-group 1
+
+Polecenie pool, network
+
+Rommon - polecenie
+
+Polecenie no auto summary
