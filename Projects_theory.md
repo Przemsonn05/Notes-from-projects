@@ -48,6 +48,16 @@ for container in ax[1].containers:
     ax[1].bar_label(container, fmt='%.2f', padding=3)
 ```
 
+lub 
+
+```python
+for bar in bars:
+    plt.text(bar.get_width() + 1,               
+             bar.get_y() + bar.get_height()/2, 
+             int(bar.get_width()),             
+             va='center', fontsize=10)
+```
+
 - ax[1].containers → grupy słupków (np. każdy kolor osobno)
 
 - bar_label() → automatycznie:
@@ -73,4 +83,30 @@ df[df['PM10'].notna()]
 zostawia tylko wiersze, gdzie PM10 istnieje.
 
 ---
+
+### explode()
+
+### MultiLabelBinarizer()
+
+### loc/iloc - co robią, jakie różnice
+
+### weighted rating
+
+### ast.literal_eval()
+
+### Counter()
+
+### from_dict
+
+### MultipleLocator
+
+### csr_matrix
+
+### Cosine similarity i Jaccard Similarity
+
+### str.strip()
+
+### default_rng
+
+### choice
 
