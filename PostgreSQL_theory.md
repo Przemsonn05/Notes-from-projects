@@ -1,3 +1,5 @@
+# Teoria PostgreSQL
+
 ### Lab1:
 
 | Polecenie       | Znaczenie                             |
