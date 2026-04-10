@@ -1,5 +1,7 @@
 # Ciekawe zagadnienia bazując na labach z ML
 
+## Z lab4
+
 ### Po co as_frame = True
 
 Domyślnie Scikit-learn zwraca dane w formacie tablic NumPy. Jeśli ustawisz True, dane zostaną załadowane jako pandas DataFrame.
@@ -94,7 +96,15 @@ Po co to tutaj jest? Pamiętasz, jak wspomniałem, że LinearSVC jest wrażliwy 
 
 ### Czym jest mean_squared_error
 
-![alt text](image-5.png)
+1. Definicja w jednym zdaniuMSE (Mean Squared Error), czyli błąd średniokwadratowy, to średnia arytmetyczna kwadratów różnic między wartościami przewidzianymi przez model a wartościami rzeczywistymi.
+
+2. Rozbicie na czynniki pierwsze (Proces)Wyobraź sobie, że MSE to trzyetapowy proces "rozliczania" modelu:
+
+- Liczymy błąd (Residuum): Dla każdego punktu sprawdzamy, o ile model się pomylił ($y - \hat{y}$).
+
+- Podnosimy do kwadratu: Każdy błąd potęgujemy. To kluczowy krok, bo eliminuje on znaki minus (błędy się nie znoszą) i sprawia, że duże błędy stają się gigantycznymi karami.
+
+- Wyciągamy średnią: Sumujemy te kwadraty i dzielimy przez liczbę wszystkich obserwacji ($n$), żeby wiedzieć, jak model radzi sobie "przeciętnie".
 
 ### Co zwracają podwójne nawiasy `[[...]]`
 
@@ -122,11 +132,43 @@ W standardowym modelu liniowym szukamy prostej linii. Jednak wiele danych w świ
 
 - Zaleta: Oszczędzasz pamięć RAM, bo nie tworzysz gigantycznej tabeli z nowymi cechami. Wszystko dzieje się "w locie" podczas obliczeń matematycznych.
 
+### Kernel trick
+
+To jest „supermoc” SVM. Często danych nie da się oddzielić prostą linią na płaskiej kartce (np. gdy kropki smogowe są otoczone kropkami czystymi).
+
+SVM „wypycha” dane do trzeciego (lub wyższego) wymiaru.
+
+To tak, jakbyś rzucił kropki w górę i w locie przeciął je kartką papieru. Z perspektywy 2D wygląda to na skomplikowaną krzywą, ale w wyższym wymiarze to była prosta płaszczyzna.
+
 ### Parametry C i Coef0
 
 C: To siła regularyzacji. Małe C oznacza szeroką, wybaczającą błędy "tubę". Duże C zmusza model do bardzo ciasnego trzymania się punktów (ryzyko overfittingu).
 
+    - Małe C (np. 0.1, 1): Model jest „wyluzowany”. Pozwala na to, by niektóre punkty znalazły się po złej stronie granicy, byle tylko zachować jak najszerszy i najprostszy margines.
+
+        - Zaleta: Lepiej radzi sobie z nowymi danymi (dobra generalizacja).
+
+        - Ryzyko: Może zbyt uprościć problem (Underfitting).
+
+    - Duże C (np. 100, 1000): Model staje się „perfekcjonistą”. Chce za wszelką cenę uniknąć błędów w treningu, nawet jeśli oznacza to stworzenie bardzo powyginanej, nienaturalnej granicy.
+
+        - Zaleta: Wysoka celność na danych, które już zna.
+
+        - Ryzyko: Przetrenowanie (Overfitting) – model „nauczy się na pamięć” Twoich outlierów z Krakowa i zawiedzie w przyszłości.
+
 coef0: Kluczowy przy jądrze wielomianowym. Kontroluje, jak bardzo model ma być zdominowany przez wysokie potęgi (stopień 4) w stosunku do niższych. Pomaga kontrolować "wygięcie" krzywej.
+
+Parametr coef0 występuje tylko w jądrach poly i sigmoid. W matematyce oznacza on stałą $r$ we wzorze:
+
+$$K(x, y) = (\gamma \cdot \langle x, y \rangle + r)^d$$
+
+W praktyce kontroluje on, jak bardzo model ma być podatny na wpływ wielomianów wyższego stopnia w porównaniu do tych niższych.
+
+- Jeśli coef0 = 0: Model opiera się głównie na czystym mnożeniu cech. Jest bardzo wrażliwy na skalę danych.
+
+- Jeśli coef0 > 0: Dodajemy stałą wartość do wyniku przed podniesieniem go do potęgi. To sprawia, że model staje się bardziej elastyczny i stabilny.
+
+Pomaga to modelowi „zauważyć” prostsze zależności, nawet jeśli kazałeś mu użyć skomplikowanego wielomianu (np. stopnia 3).
 
 ### Dlaczego scoring='neg_mean_squared_error'
 
@@ -142,3 +184,47 @@ n_jobs=-1: To dopalacz. Mówi komputerowi: "użyj wszystkich dostępnych rdzeni 
 
 Przykład: best_C = gs.best_params_['svr__C']:
 Obiekt gs (Twój GridSearchCV) po zakończeniu przeszukiwania przechowuje zwycięską kombinację w słowniku best_params_. Tutaj wyciągasz wartość C, która dała najniższy błąd (najmniejszy neg_mean_squared_error).
+
+### Różnica między SVR a PolynomialFeatures
+
+A. PolynomialFeatures + Linear Model (Podejście "Ręczne")
+
+- Tutaj fizycznie tworzysz nowe kolumny w danych przed uruchomieniem modelu.
+
+- Jeśli masz cechę $x$, to PolynomialFeatures stworzy $x^2, x^3$ itd.Problem: Liczba kolumn rośnie drastycznie (eksplozja wymiarowości). 
+
+- Jeśli masz 10 cech i stopień wielomianu 3, nagle masz setki kolumn. To spowalnia komputer i grozi przetrenowaniem.
+
+B. SVR(kernel='poly') (Podejście "Kernel Trick")
+
+- Tutaj nie tworzysz żadnych nowych kolumn. Twoje dane wejściowe pozostają takie same.
+
+- Magia: SVR oblicza „podobieństwo” między punktami tak, jakby były one w wyższym wymiarze, ale robi to za pomocą sprytnego wzoru matematycznego (jądra).
+
+- Zaleta: Jest znacznie szybszy obliczeniowo przy wielu cechach i nie zajmuje dodatkowej pamięci RAM na nowe kolumny.
+
+### Kiedy nie warto stosowac accuracy
+
+Główne wady Accuracy:
+
+1. Problem niezbalansowanych klas (Imbalanced Data):
+
+- Wyobraź sobie, że w Krakowie dni z ekstremalnym smogiem (powyżej 200 µg/m³) jest tylko 5 w roku. Pozostałe 360 dni jest "w normie".Jeśli Twój model będzie zawsze, bezmyślnie mówił: „Nie będzie smogu”, to jego Accuracy wyniesie 98,6% ($360/365$).Model jest matematycznie „genialny”, ale w praktyce bezużyteczny, bo nie wykrył ani jednego alarmu.
+
+2. Brak rozróżnienia na typy błędów:
+
+- Accuracy traktuje każdy błąd tak samo. W przypadku jakości powietrza mamy dwa rodzaje pomyłek:
+
+    - False Positive (Fałszywy alarm): Model mówi „będzie smog”, a jest czysto. Ludzie niepotrzebnie zostają w domu. (Mała szkodliwość).
+    - False Negative (Przeoczenie): Model mówi „jest super”, a w rzeczywistości pył dusi miasto. Ludzie wychodzą biegać i niszczą sobie płuca. (Bardzo duża szkodliwość).Accuracy nie powie Ci, który błąd model popełnia częściej.
+
+## Z lab5
+
+### Czym jest XAI
+
+### Jak działa Random Forest
+
+### Czym modele drzwiaste typu Random Forest są podatne na overfitting
+
+### Parametry Random Forest
+
