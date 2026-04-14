@@ -3398,6 +3398,296 @@ wszelki ruch z nim związany. Gdy ruter ten ulegnie awarii - adres
 wirtualny migruje do kolejnego rutera bez powodowania przerwy w
 ruchu.
 
+## Translacja adresów IP
+
+### NAT
+
+- Zastosowanie urządzeń konwertujących adresy IP (Network
+Address Translation - NAT) dla sieci lub hostów
+
+- Nazwa potoczna, związana z dostarczaną przez NAT
+funkcjonalnością konwersji: masquerade - translacja adresów
+pozwala między innymi na „ukrycie” sieci wyizolowanej
+
+- Adresy hostów w podsieci, z której ruch wychodzący podlega
+konwersji są konfigurowane z użyciem tradycyjnego ustawienia
+domyślnej bramki – będącego jednocześnie adresem hosta IP
+dokonującego translacji (ruter sprzętowy, serwer itp.).
+
+- Bramka taka odbiera datagram i zmienia jego nagłówek IP wpisując
+inny adres jako nadawcy (zmieniając też często numer portu TCP)
+
+- Wadą są trudności z funkcjonowaniem niektórych usług warstw
+wyższych – użytkujących połączenia ustanawiane w przeciwnym
+kierunku niż wyjściowy z sieci lokalnej (serwer->klient TCP itp.)
+
+### Bloki adresów IP
+
+- NAT może dokonywać translacji w trybie:
+    
+    - Jeden adres IP <-> jeden adres
+    
+    - Wiele adresów IP (pula IP) <-> jeden adres
+    
+    - Wiele adresów IP <-> wiele adresów IP
+
+- Konwersja nie musi być wiązania z przejściem datagramu przez
+bramkę – możliwe jest użycie tzw. rutera na patyku (router on a
+stick), gdzie datagram po konwersji wraca do tej samej sieci
+
+- Z reguły NAT operuje na trzech blokach adresów, przypisanych do
+tzw. sieci prywatnych. Znaczna większość ruterów nie posiada
+jednak ograniczenia NAT do adresacji sieci prywatnej.
+
+- Bloki adresów traktowanych jako przynależne do sieci prywatnych:
+    - Klasa A : 10.0.0.0 – 10.255.255.255
+    
+    - Klasa B : 172.16.0.0 – 172.31.255.255
+    
+    - Klasa C : 192.168.0.0
+    – 192.168.255.255
+
+## NAT
+
+### Overloading
+
+- Overloading umożliwia stworzenie relacji typu „jeden do wielu”
+pomiędzy adresami IP podczas translacji (NAT). NAT bez trybu
+overloading pozwala tylko na translację kolejnych adresów IP na
+kolejne inne.
+
+- W większości ruterów funkcjonalność NAT jest konfigurowana w oparciu
+o tzw. pule adresów IP (w ten sposób określa się zakres adresów).
+
+- Kontrola procesu translacji jest regulowana poprzez standardowe listy
+kontrolne (ACL)
+
+- Wyróżniane są dodatkowo interfejsy, pomiędzy którymi następuje
+translacja (inside i outside)
+
+- W przypadku stosowania trybu overloading możliwe także jest
+zdefiniowanie puli adresów – lecz wtedy jedno-adresowej i przypisanie jej do interfejsu inside (z tego interfejsu odbierane są datagramy od różnych nadawców – więc z różnymi adresami IP do konwersji na „adres nadawcy” w outside)
+
+### Rodzaje adresów
+
+- Podział ze względu na występowanie (uwaga – nie intuicyjny):
+
+    - Adres local – występujący w datagramach w sieci inside (prywatnej)
+
+    - Adres global - występujący w datagramach IP w sieci outside
+(publicznej)
+
+- Z zachowaniem tego podziału a NAT występują 4 rodzaje adresów:
+    
+    - Inside local – adres hosta w sieci prywatnej (inside)
+    
+    - Inside global – adres interfejsu IP w sieci publicznej (tego, który jest
+    nadawcą datagramów do Internetu) już po konwersji (interfejs występuje w imieniu hostów z sieci prywatnej). Gdy wybieramy opcję overloading adres ten będzie adresem interfejsu outside w ruterze NAT.
+    
+    - Outside global – rzeczywisty adres hosta docelowego
+    (w Internecie)
+    
+    - Outside local – adres hosta w Internecie znajdujący się w
+    datagramie, który fizycznie jest jeszcze w sieci prywatnej
+    (przeważnie taki sam, jak outside global)
+
+![alt text](image-29.png)
+
+### NAT a rutowanie IP
+
+- Generalne zasada – konfiguracja NAT nie decyduje o tym co
+zrobić z datagramem IP (np. umieścić w danym interfejsie
+wyjściowym), lecz jedynie podmienia wartości adresów w
+datagramie. Więc decyzje o postępowaniu z datagramem są
+ustalane na podstawie zawartości tablicy rutowania IP (gdy jest to
+jeszcze istotne).
+
+- Kolejność wykonywania operacji:
+Router (config)#ip nat inside
+- dokonanie konwersji w datagramie wchodzącym do ruter a (po przeprowadzeniu konwersji podejmowane są kroki związane z rutowaniem IP)
+Router (config)#ip nat outside
+- dokonanie konwersji w datagramie wychodzącym z rutera
+
+### NAT - Tworzenie DMZ i mapowań statycznych
+
+- Umożliwienie mapowania portów dla strumieni TCP z sieci outside
+do usług w sieci inside:
+Router(config)# ip nat inside source static tcp 10.0.0.2 8080
+10.0.0.1 80
+gdzie 10.0.0.2 to adres inside local, 10.0.0.1 to adres inside global,
+
+- Powyższa instrukcja funkcjonuje najczęściej w połączeniu z
+mapowaniem statycznym
+
+- Mapowanie (translacja) statyczna występuje w tablicy NAT cały
+czas. Zdefiniowanie translacji statycznej:
+Router(config)# ip nat inside source static 10.0.0.3 200.200.200.2 
+
+## Adresowanie IPv6
+
+![alt text](image-30.png)
+
+![alt text](image-31.png)
+
+### Komponenty adresu IPv6:
+
+- TLA odpowiadają wpisom w globalnej tablicy rutowania, może
+ich być 8192, ilość tę można w przyszłości powiększyć biorąc
+bity z 8 zarezerwowanych
+
+- NLA powinny określać cel w ramach jednego TLA, typowo jeden
+identyfikator może być przyznawany jednej instytucji
+
+- SLA - pozwala na określenie podsieci lokalnych, może ich być
+65535 
+
+- Identyfikator interfejsu jest kojarzony z adresem Ethernet
+(MAC), ale przeznaczono na niego 64, a nie 48 bitów. Często
+konstruuje się go z MAC wstawiając po 3-cim bajcie MAC
+dodatkowe 16 bitów o wartości 0xFFFE.
+
+### IPv6 unicast
+
+![alt text](image-32.png)
+
+### Adresy specjalne i prefiksy
+
+![alt text](image-33.png)
+
+![alt text](image-34.png)
+
+### Cechy interfesjów IPv6
+
+- Interfejs może mieć wiele adresów IPv6, np.: kilka różnych linklocal address, global address i inne.
+
+- Adresy mogą być trwałe lub tymczasowe (mogą być użyte tylko dla
+konkretnego połączenia wychodzącego, identyfikując klienta +
+usługę na bazie treści adresu IPv6)
+
+- Istnieją konfigurowalne „tablice preferencji”, łączące każdy prefiks
+danego adresu (routing prefix) z tzw. precedence level (liczbą,
+będącą priorytetem). W przypadku posiadania (np. chwilowego)
+danego adresu – możliwe jest wtedy automatyczne podjęcie
+decyzji, którego adresu użyć np. jako źródłowego dla połączenia
+wychodzącego
+
+### Lifetime dla adresów IPv6
+
+- Każdy adres IPv6 ma czas życia (domyślnie skonfigurowany jako
+nieskończony)
+
+- Ruter konfigurujący adresy zdalnych interfejsów IPv6 może
+wymieniać ich adresy podając interfejsom dodatkową wartości
+lifetime adresu
+
+- Przeterminowany adres IPv6 przechodzi w interfejsie ze stanu
+preferred do deprecated (dalej może być używany, lecz bez
+możliwości nawiązywania nowych połączeń przy jego użyciu)
+
+- Po dalszym czasie przechodzi do stanu invalid. Wtedy może być już
+przypisany do innego interfejsu
+
+### IPv6 multicast
+
+- Adres IPv6 multicast zawiera:
+    
+    - 8-bitowy prefiks o wartości 11111111 (FF)
+    
+    - 4-bitowe pole flag (3 bity używane)
+    
+    - 4-bitowe pole scope field identyfikujące unikatowość adresu i
+    (częściowo) przynależność do konkretnej usługi oraz przede
+    wszystkim zasięg, w jakim znajdować się mogą odbiorcy
+    datagramu
+    
+    - 112-bitowe pole identyfikatora grupy multicast
+
+- Adresy IPv6 multicast są powszechnie użytkowane do wspierania
+protokołów Internetu zarządzających ruchem nad IPv6
+
+### IPv6 multiclass address scpoes
+
+![alt text](image-35.png)
+
+### IPv6 i IPv4 - mapowanie adresów
+
+- Użytkowanie IPv6 jest obecnie w dużej mierze oparte na mapowaniach
+tych adresów wykorzystujących poprzednią wersję protokołu (IPv4).
+Technika ta określana jest skrótem 6to4. Mapowanie adresów:
+2002:xxxx:xxxx::/16 <-> xx.xx.xx.xx
+gdzie xxxxxxxx to treść adresu IPv4 (reprezentację dziesiętną należy
+zamienić na heksadecymalną przy zapisywaniu tej treści)
+
+- Istnieją także adresy IPv6 mapowane z IPv4 w inny sposób. Powstały tu
+adres jest określany mianem IPv4-mapped IPv6
+lub IPv4 compatible address:
+0:0:0:0:0:FFFF:x.x.x.x/96 lub 0:0:0:0:0:0:x.x.x.x/96
+gdzie x.x.x.x to adres IPv4 (stosuje się reprezentację dziesiętną, która
+jest automatycznie zamieniania na heksadecymalną). Zapis adresu
+zawiera więc zarówno symbole „ : ” jak i „ .” i taka jego postać jest
+przetwarzana przez systemy operacyjne urządzeń w wydawanych im
+komendach
+
+### Tunelowanie IPv6
+
+- Mechanizm polega umieszczaniu datagramów IPv6 w tunelach
+punkt-punkt tworzonych w sieciach IPv4 (następuje enkapsulacja w
+datagramach IPv4)
+
+- Do oznaczenia protokołu tunelowania (6in4) w datagramach IP
+wykorzystywana jest wartość 41
+
+- Tunele są zestawiane manualnie przez odpowiednią konfigurację
+ruterów-bramek
+
+- Istnieje możliwość zestawiania tuneli „dynamicznych” ('proto-41
+heartbeat' tunnels) – gdzie przeciwległy koniec tunelu może
+migrować pomiędzy kilkoma hostami (ruterami). Nowy adres tunelu
+jest wtedy przekazywany poprzez komunikat heartbeat.
+
+### Użytkowanie adresów IPv6 w systemie operacyjnym
+
+![alt text](image-36.png)
+
+![alt text](image-37.png)
+
+## NAT w IPv6
+
+- NAT, z uwagi na szeroki zakres adresacyjny IPv6, nie jest
+technologią bezpośrednio z IPv6 powiązaną (powstał nad IPv4 z
+uwagi na braki w adresacji)
+
+- Implementowane jest prowadzenie konwersji host-host (bez
+techniki oveloading) – technologia nosi nazwę NAT64. Jest to tak
+zwany wariant stateless (brak overloading)
+
+- NAT stosowany jest dość często do prowadzenia konwersji
+IPv4 <-> IPv6 - gdy hosty nie posiadające przeciwległych adresów
+(odpowiednio IPv4 i IPv6) potrzebują się komunikować.
+Technologia nosi nazwę NAT64. W jej przypadku konieczna jest
+translacja wszystkiego, co napływa do interfejsu IPv6(nie są
+definiowane pule adresów IP). Po stronie IPv6 technika używa
+pseudo-interfejsów IPv6 (generuje adresy IPv6 nadawcy). Po
+stronie IPv4 – używany jest adres IPv4 urządzenia, które dokonuje
+translacji rutera.
+
+- Host IPv6 zamierza połączyć się z serwerem IPv4, znając jego adres
+(IPv4, przykładowo 1.1.1.1). Wysyła wtedy do rutera NAT64 pakiet IPv6
+z adresem docelowym IPv6 o następującej treści: 64:ff9b::0101:0101,
+gdzie starsze 64 bity to wartość charakterystyczna dla NAT64
+zdefiniowana przez IANA, a młodsze 64 bity to adres IPv4 (1.1.1.1)
+
+- Ruter NAT64 na podstawie otrzymanego pakietu IPv6 generuje pakiet
+IPv4 i wysyła do celu ze swoim adresem IPv4 jako adresem nadawcy.
+Gdy otrzyma odpowiedź – dokonuje konwersji odwrotnej i wysyła pakiet
+IPv6 do początkowego hosta
+
+- Istnieje usługa DNS64, stanowiąca serwer pośredniczący dla DNS i
+działający na podobnych zasadach: zapytanie o rekord AAAA wysłane do
+takiej usługi powoduje wygenerowanie następnego zapytania o rekord
+A, a po otrzymaniu odpowiedzi – przesłanie jej do pytającego o rekord
+AAAA z dodaniem w adresie IPv
+
 
 
 ---
@@ -3538,7 +3828,7 @@ ruchu.
 - Ma IP
 - routing
 
-## Wykłąd 4
+## Wykład 4
 
 Listy kontrolne - ACL
 

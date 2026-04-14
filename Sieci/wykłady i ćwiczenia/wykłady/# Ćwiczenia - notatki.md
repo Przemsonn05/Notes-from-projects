@@ -2299,3 +2299,733 @@ PC> ping 200.200.200.3
 | `show ip dhcp binding` | Przydzielone adresy DHCP |
 | `show bridge` | Stan mostka |
 | `show spanning-tree brief` | Stan Spanning Tree |
+
+# Sieci Komputerowe – Laboratorium 071
+
+## Rutowanie OSPF, Redystrybucja tras, Tunelowanie GRE
+
+> **Jak korzystać z tej notatki?**  
+> Każda komenda jest wyraźnie oznaczona i gotowa do wklejenia do PuTTY.  
+> Symbole trybów CLI Cisco:
+> - `Router>` – tryb użytkownika (EXEC)
+> - `Router#` – tryb uprzywilejowany (privileged EXEC)
+> - `Router(config)#` – tryb konfiguracji globalnej
+> - `Router(config-if)#` – tryb konfiguracji interfejsu
+> - `Router(config-router)#` – tryb konfiguracji protokołu rutowania
+
+---
+
+# ZADANIE A – Rutowanie dynamiczne OSPF
+
+## A.1 – Przygotowanie interfejsów fizycznych i loopback
+
+### Na każdym ruterze (R1 i R2) – wejście w tryb konfiguracji globalnej
+
+```
+enable
+configure terminal
+```
+
+### Konfiguracja interfejsu fizycznego (Ethernet lub Serial)
+
+> Zastąp `fa 0/0` właściwym interfejsem oraz wpisz odpowiedni adres IP dla swojej pary adresowej.
+
+**Na R1:**
+```
+interface FastEthernet0/0
+ip address 200.200.200.1 255.255.255.0
+no shutdown
+exit
+```
+
+**Na R2:**
+```
+interface FastEthernet0/0
+ip address 200.200.200.2 255.255.255.0
+no shutdown
+exit
+```
+
+### Konfiguracja interfejsów loopback (symulują podłączone sieci/hosty)
+
+> Adresy loopback muszą być unikatowe w całej instalacji – nie mogą się pokrywać między ruterami!
+
+**Na R1:**
+```
+interface Loopback0
+ip address 100.100.100.1 255.255.255.0
+exit
+```
+
+**Na R2:**
+```
+interface Loopback0
+ip address 200.200.201.1 255.255.255.0
+exit
+```
+
+---
+
+## A.2 – Włączenie rutowania IP i trybu classless
+
+> Wykonaj na **każdym** ruterze.
+
+```
+ip routing
+ip classless
+```
+
+---
+
+## A.3 – Uruchomienie OSPF w pojedynczym obszarze (area 0)
+
+> `150` to identyfikator procesu OSPF – **musi być taki sam na wszystkich ruterach**.
+
+### Włączenie procesu OSPF i rejestracja sieci
+
+**Na R1:**
+```
+router ospf 150
+network 200.200.200.0 0.0.0.255 area 0
+network 100.100.100.0 0.0.0.255 area 0
+exit
+```
+
+**Na R2:**
+```
+router ospf 150
+network 200.200.200.0 0.0.0.255 area 0
+network 200.200.201.0 0.0.0.255 area 0
+exit
+```
+
+> **UWAGA dot. maski:** W OSPF maska jest zapisywana w postaci **inwersji** (wildcard mask).  
+> Dla /24 (255.255.255.0) → wpisz `0.0.0.255`  
+> Dla /16 (255.255.0.0) → wpisz `0.0.255.255`
+
+---
+
+## A.4 – Sprawdzenie stanu OSPF
+
+### Podstawowa diagnostyka po uruchomieniu OSPF
+
+```
+show ip protocols
+```
+> Pokaże aktywne protokoły rutowania i ich parametry.
+
+```
+show ip interface brief
+```
+> Pokaże stan wszystkich interfejsów (UP/DOWN) i ich adresy IP.
+
+```
+show ip ospf interface fa 0/0
+```
+> Pokaże szczegóły OSPF dla wybranego interfejsu (priorytet, rola DR/BDR, hello interval itd.)
+
+```
+show ip route
+```
+> Pokaże tablicę rutowania. Trasy OSPF oznaczone są literą `O`.
+
+```
+show ip ospf neighbor
+```
+> Pokaże listę sąsiadów OSPF – tu sprawdzisz role DR / BDR / DROTHER.
+
+---
+
+## A.5 – Ping z określonym adresem źródłowym (source ping)
+
+> Używamy tego, gdy chcemy pingować z adresu loopback (a nie z interfejsu fizycznego).
+
+```
+ping 200.200.201.1 source 100.100.100.1
+```
+
+> Gdzie:  
+> `200.200.201.1` – adres docelowy (loopback drugiego rutera)  
+> `100.100.100.1` – adres źródłowy (nasz loopback)
+
+---
+
+## A.6 – Rola DR / BDR / DROTHER i zmiana priorytetu OSPF
+
+### Sprawdzenie ról sąsiadów OSPF
+
+```
+show ip ospf neighbor
+```
+
+> W kolumnie `State` zobaczysz:
+> - `FULL/DR` – sąsiad jest Designated Routerem
+> - `FULL/BDR` – sąsiad jest Backup DR
+> - `FULL/DROTHER` – zwykły ruter
+
+### Zmiana priorytetu OSPF (wymuszenie przeniesienia roli DR)
+
+> Priorytet `0` = ruter **nigdy** nie zostanie DR. Wyższy priorytet = większa szansa na DR.
+
+```
+interface FastEthernet0/0
+ip ospf priority 0
+exit
+```
+
+> Aby zobaczyć efekt – sprawdź stan po zmianie:
+
+```
+show ip ospf interface fa 0/0
+```
+
+> **UWAGA:** Zmiana roli DR/BDR nie zachodzi natychmiast – wymaga wygaśnięcia relacji sąsiedztwa lub resetu procesu OSPF. W sieci point-to-point pojęcia DR/BDR **nie istnieją** (oznaczone jako `-`).
+
+---
+
+## A.7 – Obserwacja pakietów HELLO i debugowanie OSPF
+
+### Włączenie debugowania sąsiedztwa OSPF
+
+```
+debug ip ospf adjacency
+```
+
+### Obserwacja zdarzeń OSPF
+
+```
+debug ip ospf events
+```
+
+### Wyłączenie debugowania (po zakończeniu obserwacji!)
+
+```
+undebug all
+```
+
+### Zmiana interwału HELLO (musi być identyczna na obu końcach łącza!)
+
+```
+interface FastEthernet0/0
+ip ospf hello-interval 15
+exit
+```
+
+> Domyślne wartości:
+> - Sieci broadcast / point-to-point: Hello = **10s**, Dead = **40s**
+> - Non-broadcast / point-to-multipoint: Hello = **30s**, Dead = **120s**
+
+---
+
+## A.8 – Zmiana kosztu łącza OSPF
+
+> Domyślny koszt = 100 000 000 / przepustowość (bandwidth w bps)
+
+```
+interface FastEthernet0/0
+ip ospf cost 35
+exit
+```
+
+> Koszt jest naliczany dla ruchu **wchodzącego** do rutera przez dany interfejs.
+
+---
+
+## A.9 – OSPF Multi-area i Virtual Links
+
+### Schemat obszarów:
+```
+[AREA 0] --- ABR1 --- [AREA 1] --- ABR2 --- [AREA 2]
+```
+
+### Dodanie nowego obszaru (area 1) przez dodanie loopback
+
+**Na ruterze R1:**
+```
+interface Loopback5
+ip address 200.200.101.1 255.255.255.0
+exit
+router ospf 150
+network 200.200.101.0 0.0.0.255 area 1
+exit
+```
+
+### Sprawdzenie routerów brzegowych (ABR)
+
+```
+show ip ospf border-routers
+```
+
+### Konfiguracja Virtual Link (gdy area 2 nie ma bezpośredniego połączenia z area 0)
+
+> Sprawdź Router ID każdego rutera ABR:
+
+```
+show ip ospf interface
+```
+
+> W wyniku znajdź linię `Process ID X, Router ID Y.Y.Y.Y` – to jest Router ID.
+
+**Na RuterABR1 (po stronie area 0):**
+```
+router ospf 150
+area 1 virtual-link 6.6.6.6
+exit
+```
+
+**Na RuterABR2 (po stronie area 2):**
+```
+router ospf 150
+area 1 virtual-link 5.5.5.5
+exit
+```
+
+> Gdzie `5.5.5.5` i `6.6.6.6` to **Router ID** (nie adresy IP interfejsów!) odpowiednich ruterów.
+
+### Weryfikacja Virtual Links
+
+```
+show ip ospf virtual-links
+```
+
+---
+
+# ZADANIE B – Redystrybucja tras między protokołami IGP
+
+## B.1 – Schemat instalacji
+
+```
+PC <-> R1 <-> R2 <-> R3 <-> PC
+       RIP   RIP+OSPF  OSPF
+```
+
+- **R1** – tylko RIP
+- **R2** – RIP + OSPF (ruter graniczny, wykonuje redystrybucję)
+- **R3** – tylko OSPF
+
+---
+
+## B.2 – Konfiguracja interfejsów i adresacji
+
+**Na R1:**
+```
+enable
+configure terminal
+interface FastEthernet0/0
+ip address 10.0.12.1 255.255.255.0
+no shutdown
+exit
+interface Loopback0
+ip address 10.1.1.1 255.255.255.0
+exit
+```
+
+**Na R2:**
+```
+enable
+configure terminal
+interface FastEthernet0/0
+ip address 10.0.12.2 255.255.255.0
+no shutdown
+exit
+interface FastEthernet0/1
+ip address 10.0.23.2 255.255.255.0
+no shutdown
+exit
+```
+
+**Na R3:**
+```
+enable
+configure terminal
+interface FastEthernet0/0
+ip address 10.0.23.3 255.255.255.0
+no shutdown
+exit
+interface Loopback0
+ip address 10.3.3.3 255.255.255.0
+exit
+```
+
+---
+
+## B.3 – Włączenie RIP na R1 i R2
+
+**Na R1:**
+```
+router rip
+version 2
+network 10.0.12.0
+network 10.1.1.0
+no auto-summary
+exit
+```
+
+**Na R2 (tylko strona RIP):**
+```
+router rip
+version 2
+network 10.0.12.0
+no auto-summary
+exit
+```
+
+---
+
+## B.4 – Włączenie OSPF na R2 i R3
+
+**Na R2 (tylko strona OSPF):**
+```
+router ospf 150
+network 10.0.23.0 0.0.0.255 area 0
+exit
+```
+
+**Na R3:**
+```
+router ospf 150
+network 10.0.23.0 0.0.0.255 area 0
+network 10.3.3.0 0.0.0.255 area 0
+exit
+```
+
+---
+
+## B.5 – Sprawdzenie tablic przed redystrybucją
+
+> R1 powinien znać tylko trasy z RIP, R3 tylko z OSPF.
+
+```
+show ip route
+```
+
+---
+
+## B.6 – Redystrybucja OSPF → RIP (na R2)
+
+> Dzięki temu R1 dowie się o sieciach z domeny OSPF.
+
+```
+router ospf 150
+redistribute rip metric 170 subnets
+exit
+```
+
+### Weryfikacja na R3
+
+```
+show ip route
+```
+
+> Trasy z RIP powinny być widoczne z oznaczeniem `O E1` (OSPF External Type 1).
+
+---
+
+## B.7 – Redystrybucja RIP → OSPF (na R2)
+
+> Dzięki temu R3 dowie się o sieciach z domeny RIP.
+
+```
+router rip
+redistribute ospf 150 metric 11
+exit
+```
+
+> **UWAGA:** Metryka RIP to liczba przeskoków (max = 15). Wpisz wartość ≤ 15.  
+> Słowo kluczowe `subnets` jest wymagane przy redystrybucji **do OSPF** – bez niego propagowane są tylko sieci classfull.
+
+### Weryfikacja na R1
+
+```
+show ip route
+```
+
+> Trasy z OSPF pojawią się z oznaczeniem `R` (RIP nie rozróżnia źródła tras).
+
+---
+
+## B.8 – Zamiana OSPF na EIGRP (opcjonalne)
+
+### Usunięcie OSPF
+
+**Na R2 i R3:**
+```
+no router ospf 150
+```
+
+### Konfiguracja EIGRP
+
+**Na R2:**
+```
+router eigrp 100
+network 10.0.23.0 0.0.0.255
+no auto-summary
+exit
+```
+
+**Na R3:**
+```
+router eigrp 100
+network 10.0.23.0 0.0.0.255
+network 10.3.3.0 0.0.0.255
+no auto-summary
+exit
+```
+
+### Redystrybucja EIGRP ↔ RIP na R2
+
+```
+router eigrp 100
+redistribute rip metric 1000 100 255 1 1500
+exit
+
+router rip
+redistribute eigrp 100 metric 5
+exit
+```
+
+---
+
+# ZADANIE C – Tunelowanie GRE
+
+## C.1 – Schemat instalacji
+
+```
+[R1] -------- [R2 = Internet] -------- [R3]
+  \_______________TUNEL GRE_______________/
+```
+
+- R2 symuluje Internet – **nie konfigurujemy w nim OSPF/GRE**
+- Tunel GRE biegnie **między R1 i R3**, przez R2
+
+---
+
+## C.2 – Konfiguracja interfejsów fizycznych
+
+**Na R1:**
+```
+enable
+configure terminal
+interface FastEthernet0/0
+ip address 200.200.200.1 255.255.255.0
+no shutdown
+exit
+```
+
+**Na R2:**
+```
+enable
+configure terminal
+interface FastEthernet0/0
+ip address 200.200.200.2 255.255.255.0
+no shutdown
+exit
+interface FastEthernet0/1
+ip address 200.200.201.2 255.255.255.0
+no shutdown
+exit
+```
+
+**Na R3:**
+```
+enable
+configure terminal
+interface FastEthernet0/0
+ip address 200.200.201.1 255.255.255.0
+no shutdown
+exit
+```
+
+---
+
+## C.3 – Trasy statyczne (symulowany Internet)
+
+> R1 i R3 muszą wiedzieć, jak dotrzeć do siebie przez R2.
+
+**Na R1:**
+```
+ip route 200.200.201.0 255.255.255.0 200.200.200.2
+```
+
+**Na R3:**
+```
+ip route 200.200.200.0 255.255.255.0 200.200.201.2
+```
+
+### Sprawdzenie połączenia przez Internet (przed tunelem)
+
+**Na R1:**
+```
+ping 200.200.201.1
+```
+> Powinno działać – jeśli nie, sprawdź konfigurację interfejsów i tras statycznych.
+
+---
+
+## C.4 – Konfiguracja tunelu GRE
+
+> Interfejs `Tunnel 0` to wirtualny interfejs – nie istnieje fizycznie.  
+> Adresy `192.168.5.x` to adresy **wewnątrz tunelu** (prywatna przestrzeń adresowa).
+
+**Na R1:**
+```
+interface Tunnel0
+tunnel source FastEthernet0/0
+ip address 192.168.5.1 255.255.255.0
+tunnel destination 200.200.201.1
+exit
+```
+
+**Na R3:**
+```
+interface Tunnel0
+tunnel source FastEthernet0/0
+ip address 192.168.5.2 255.255.255.0
+tunnel destination 200.200.200.1
+exit
+```
+
+### Sprawdzenie tunelu GRE
+
+**Na R1:**
+```
+ping 192.168.5.2
+```
+> Powinno przejść – oznacza to, że tunel GRE działa poprawnie.
+
+```
+show interfaces tunnel0
+```
+> W wyniku sprawdź:
+> - `Tunnel source` – adres lokalnego końca tunelu
+> - `Tunnel destination` – adres zdalnego końca tunelu
+> - Liczniki przesłanych datagramów
+
+---
+
+## C.5 – Interfejsy loopback (symulują sieci lokalne)
+
+**Na R1:**
+```
+interface Loopback0
+ip address 192.168.0.1 255.255.255.0
+exit
+```
+
+**Na R3:**
+```
+interface Loopback0
+ip address 192.168.1.1 255.255.255.0
+exit
+```
+
+---
+
+## C.6 – Uruchomienie OSPF przez tunel
+
+> OSPF biegnie **przez tunel GRE**, a nie przez fizyczne łącza.  
+> Dlatego rejestrujemy sieci tunelu i loopbacków, **NIE** sieci fizyczne (200.200.x.x).
+
+**Na R1:**
+```
+router ospf 1
+network 192.168.0.0 0.0.0.255 area 0
+network 192.168.5.0 0.0.0.255 area 0
+log-adjacency-changes
+exit
+```
+
+**Na R3:**
+```
+router ospf 1
+network 192.168.1.0 0.0.0.255 area 0
+network 192.168.5.0 0.0.0.255 area 0
+log-adjacency-changes
+exit
+```
+
+---
+
+## C.7 – Weryfikacja rutowania przez tunel
+
+### Sprawdzenie tablicy OSPF
+
+```
+show ip route ospf
+```
+> Na R1 powinna pojawić się trasa do `192.168.1.0/24` przez `192.168.5.2` (tunel).  
+> Na R3 powinna pojawić się trasa do `192.168.0.0/24` przez `192.168.5.1` (tunel).
+
+### Traceroute potwierdzający ścieżkę przez tunel
+
+**Na R1:**
+```
+traceroute 192.168.1.1 source 192.168.0.1
+```
+
+> W wyniku powinieneś zobaczyć skok przez `192.168.5.2` (wnętrze tunelu), a **nie** przez `200.200.200.2` (fizyczne łącze R2).
+
+### Sprawdzenie sąsiedztwa OSPF
+
+```
+show ip ospf neighbor
+```
+> Powinien pojawić się sąsiad z adresem `192.168.5.x` – to oznacza, że OSPF działa przez tunel.
+
+### Ping z loopbacka do loopbacka (przez tunel)
+
+**Na R1:**
+```
+ping 192.168.1.1 source 192.168.0.1
+```
+
+---
+
+## C.8 – Konfiguracja MTU dla tunelu GRE
+
+> Tunelowanie GRE dodaje dodatkowe nagłówki do każdego datagramu, więc standardowe MTU (1500 bajtów) może powodować problemy z fragmentacją. Należy je zmniejszyć.
+
+**Na R1:**
+```
+interface Tunnel0
+ip mtu 1460
+ip tcp adjust-mss 1430
+exit
+```
+
+**Na R3:**
+```
+interface Tunnel0
+ip mtu 1460
+ip tcp adjust-mss 1430
+exit
+```
+
+> **UWAGA:** Wartości MTU i MSS **muszą być identyczne** po obu stronach tunelu!  
+> - `ip mtu 1460` – maksymalny rozmiar datagramu IP w tunelu  
+> - `ip tcp adjust-mss 1430` – maksymalny rozmiar segmentu TCP (MSS = MTU - 30 bajtów nagłówka)
+
+---
+
+# Podsumowanie – najważniejsze komendy diagnostyczne
+
+| Komenda | Opis |
+|---|---|
+| `show ip route` | Tablica rutowania |
+| `show ip protocols` | Aktywne protokoły rutowania |
+| `show ip interface brief` | Stan interfejsów |
+| `show ip ospf neighbor` | Sąsiedzi OSPF i ich role |
+| `show ip ospf interface fa0/0` | Szczegóły OSPF dla interfejsu |
+| `show ip ospf virtual-links` | Stan virtual linków |
+| `show ip ospf border-routers` | Routery ABR/ASBR |
+| `show ip route ospf` | Tylko trasy OSPF |
+| `show interfaces tunnel0` | Stan interfejsu tunelowego |
+| `ping X.X.X.X source Y.Y.Y.Y` | Ping z wybranego interfejsu |
+| `traceroute X.X.X.X` | Śledzenie ścieżki |
+| `debug ip ospf events` | Debugowanie zdarzeń OSPF |
+| `debug ip ospf adjacency` | Debugowanie sąsiedztwa OSPF |
+| `undebug all` | Wyłączenie debugowania |
+
+---
+
+> **Tip końcowy:** Zawsze po wprowadzeniu zmian poczekaj ~30-60 sekund na konwergencję protokołów rutowania, zanim zaczniesz diagnozować. Protokoły potrzebują czasu na wymianę informacji o trasach.
