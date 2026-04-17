@@ -2315,7 +2315,7 @@ PC> ping 200.200.200.3
 
 ---
 
-# ZADANIE A – Rutowanie dynamiczne OSPF
+## ZADANIE A – Rutowanie dynamiczne OSPF
 
 ## A.1 – Przygotowanie interfejsów fizycznych i loopback
 
@@ -2786,7 +2786,7 @@ exit
 
 ---
 
-# ZADANIE C – Tunelowanie GRE
+## ZADANIE C – Tunelowanie GRE
 
 ## C.1 – Schemat instalacji
 
@@ -3029,3 +3029,437 @@ exit
 ---
 
 > **Tip końcowy:** Zawsze po wprowadzeniu zmian poczekaj ~30-60 sekund na konwergencję protokołów rutowania, zanim zaczniesz diagnozować. Protokoły potrzebują czasu na wymianę informacji o trasach.
+
+
+# LAB 010 – IP Multicast w Cisco IOS
+
+> **Tematyka:** IGMP Snooping, IP PIM Dense Mode, IP PIM Sparse Mode / Rendezvous Points
+
+---
+
+## Zadanie A – Protokół IGMP i IGMP Snooping w przełączniku Ethernet
+
+### Topologia
+
+```
+[PC1] ──┐
+        ├── [Switch Cisco] ── [Router Cisco]
+[PC2] ──┘
+```
+
+Zdefiniuj adresację IP unicast dla całej sieci (np. `192.168.1.0/24`).
+
+---
+
+### Krok 1 – Włącz IGMP Snooping w przełączniku
+
+```
+Switch(config)# ip igmp snooping
+```
+
+> Można też włączyć dla konkretnego VLANu:
+> `Switch(config)# ip igmp snooping vlan <ID>`
+
+---
+
+### Krok 2 – Konfiguracja rutera (IGMP Querier + PIM Dense Mode)
+
+Ruter musi działać jako **IGMP Querier**, żeby przełącznik mógł podsłuchiwać komunikację IGMP i kierować ruch multicast tylko do właściwych portów.
+
+```
+Router(config)# ip multicast-routing
+Router(config)# interface fastEthernet 0/0
+Router(config-if)# ip pim dense-mode
+Router(config-if)# no shutdown
+```
+
+---
+
+### Krok 3 – Uruchomienie źródła multicast (PC1 – nadawca)
+
+Użyj VLC Player z linii komend:
+
+```bash
+vlc.exe <plik> :sout=#rtp{dst=224.1.1.1,port=5004,mux=ts,ttl=10} :sout-all :sout-keep --repeat
+```
+
+- `dst=224.1.1.1` – adres grupy multicast
+- `port=5004` – port RTP
+- `mux=ts` – MPEG2 Transport Stream
+- `ttl=10` – Time To Live (musi być > liczby przeskoków przez rutery!)
+
+> ⚠️ Domyślne TTL wynosi 1 – zmiana możliwa **tylko z linii komend**, nie przez GUI VLC.
+
+---
+
+### Krok 4 – Uruchomienie odbiorcy multicast (PC2 – odbiorca)
+
+```bash
+vlc.exe rtp://224.1.1.1:5004
+```
+
+---
+
+### Krok 5 – Weryfikacja IGMP Snooping w przełączniku
+
+```
+Switch# show ip igmp snooping
+Switch# show ip igmp snooping group
+Switch# show ip igmp snooping querier
+Switch# show ip igmp snooping mrouter
+```
+
+---
+
+### Krok 6 – Obserwacje i testy
+
+- Sprawdź (Wireshark), do których portów trafia ruch multicast przy **włączonym** i **wyłączonym** IGMP Snooping.
+- Zwróć uwagę na adresację IP i MAC ramek Ethernet przenoszących ruch multicast.
+
+Wyłączenie IGMP Snooping:
+```
+Switch(config)# no ip igmp snooping
+```
+
+Włączenie z powrotem:
+```
+Switch(config)# ip igmp snooping
+```
+
+Czyszczenie grup IGMP w ruterze:
+```
+Router# clear ip igmp group
+```
+
+---
+
+## Zadanie B – IP PIM Dense Mode (Push Mode)
+
+### Topologia
+
+```
+[PC1] ── [R1] ── [R2 (środkowy)] ── [R3] ── [PC2]
+          |            |                |
+     200.200.210.0  200.200.200.0  200.200.201.0  200.200.211.0
+```
+
+> PIM Dense Mode = ruch multicast rozgłaszany do **wszystkich** ruterów. Rutery niepotrzebujące ruchu wysyłają komunikaty **prune** (wstrzymaj).
+
+---
+
+### Krok 1 – Włącz rutowanie multicast na każdym ruterze
+
+```
+Router(config)# ip multicast-routing
+```
+
+---
+
+### Krok 2 – Włącz PIM Dense Mode na każdym interfejsie (na trasie multicast)
+
+```
+Router(config)# interface fastEthernet 0/0
+Router(config-if)# ip pim dense-mode
+Router(config-if)# no shutdown
+
+Router(config)# interface fastEthernet 0/1
+Router(config-if)# ip pim dense-mode
+Router(config-if)# no shutdown
+```
+
+---
+
+### Krok 3 – Gotowe konfiguracje ruterów
+
+#### Ruter 1
+
+```
+ip multicast-routing
+
+interface fastEthernet 0/0
+ ip address 200.200.200.1 255.255.255.0
+ ip pim dense-mode
+ no shutdown
+
+interface fastEthernet 0/1
+ ip address 200.200.210.1 255.255.255.0
+ ip pim dense-mode
+ no shutdown
+
+router eigrp 100
+ network 200.200.210.0
+ network 200.200.200.0
+```
+
+#### Ruter 2 (środkowy)
+
+```
+ip multicast-routing
+
+interface fastEthernet 0/0
+ ip address 200.200.200.2 255.255.255.0
+ ip pim dense-mode
+ no shutdown
+
+interface fastEthernet 0/1
+ ip address 200.200.201.1 255.255.255.0
+ ip pim dense-mode
+ no shutdown
+
+router eigrp 100
+ network 200.200.201.0
+ network 200.200.200.0
+```
+
+#### Ruter 3
+
+```
+ip multicast-routing
+
+interface fastEthernet 0/0
+ ip address 200.200.201.2 255.255.255.0
+ ip pim dense-mode
+ no shutdown
+
+interface fastEthernet 0/1
+ ip address 200.200.211.1 255.255.255.0
+ ip pim dense-mode
+ no shutdown
+
+router eigrp 100
+ network 200.200.201.0
+ network 200.200.211.0
+```
+
+---
+
+### Krok 4 – Weryfikacja stanu multicast
+
+```
+Router# show ip mroute
+Router# show ip igmp groups
+Router# show ip igmp membership
+Router# show ip mroute summary
+Router# show ip mroute active
+Router# show ip mroute count
+Router# show interfaces summary
+```
+
+---
+
+### Krok 5 – Wyrejestrowanie odbiorcy i sprawdzenie pruned
+
+Zamknij aplikację odbiorcy na PC2, następnie sprawdź wstrzymane strumienie:
+
+```
+Router# show ip mroute pruned
+```
+
+---
+
+### Krok 6 – Symulacja fikcyjnego źródła multicast
+
+Można zdefiniować fikcyjne źródło podpięte do interfejsu rutera (nie emituje ruchu, ale figuruje w tablicy IP multicast):
+
+```
+Router1(config)# interface fastEthernet 0/0
+Router1(config-if)# ip igmp join-group 230.200.200.1
+```
+
+Sprawdzenie dostępności z innego rutera:
+
+```
+Router2# ping 230.200.200.1
+```
+
+Diagnostyka:
+
+```
+Router1# show ip pim interface count
+Router1# show ip mroute count
+```
+
+---
+
+### Krok 7 – Zamiana ról nadawcy i odbiorcy / czyszczenie tablic
+
+```
+Router# clear ip mroute *
+Router# clear ip igmp groups
+```
+
+> Po wyczyszczeniu tablic zamiana kierunku transmisji (PC2 → PC1) powinna być możliwa dla tej samej grupy multicast.
+
+---
+
+## Zadanie C – IP PIM Sparse Mode (Pull Mode)
+
+### Koncepcja
+
+- **Sparse Mode** = ruch multicast pobierany **na żądanie**.
+- Wiedza o lokalizacji źródeł przechowywana jest w **Rendezvous Point (RP)**.
+- Każdy ruter musi znać adres IP rutera RP.
+- Rutery zgłaszają do RP znane im źródła multicast.
+- Gdy ruter otrzyma zgłoszenie IGMP od hosta, pobiera ruch od RP.
+
+---
+
+### Krok 1 – Włącz rutowanie multicast (tak samo jak wcześniej)
+
+```
+Router(config)# ip multicast-routing
+```
+
+---
+
+### Krok 2 – Włącz PIM Sparse Mode na interfejsach
+
+```
+Router(config)# interface fastEthernet 0/0
+Router(config-if)# ip pim sparse-mode
+Router(config-if)# no shutdown
+
+Router(config)# interface fastEthernet 0/1
+Router(config-if)# ip pim sparse-mode
+Router(config-if)# no shutdown
+```
+
+---
+
+### Krok 3 – Wskaż Rendezvous Point (RP) na każdym ruterze
+
+W tym przykładzie RP to Ruter 2 (adres `200.200.200.2`):
+
+```
+Router(config)# ip pim rp-address 200.200.200.2
+```
+
+> ⚠️ Tę komendę należy wpisać na **każdym** ruterze – łącznie z samym RP!
+
+---
+
+### Krok 4 – Gotowe konfiguracje ruterów
+
+#### Ruter 1
+
+```
+ip multicast-routing
+
+interface fastEthernet 0/0
+ ip address 200.200.200.1 255.255.255.0
+ ip pim sparse-mode
+ no shutdown
+
+interface fastEthernet 0/1
+ ip address 200.200.210.1 255.255.255.0
+ ip pim sparse-mode
+ no shutdown
+
+ip pim rp-address 200.200.200.2
+
+router eigrp 100
+ network 200.200.210.0
+ network 200.200.200.0
+```
+
+#### Ruter 2 (środkowy – Rendezvous Point)
+
+```
+ip multicast-routing
+
+interface fastEthernet 0/0
+ ip address 200.200.200.2 255.255.255.0
+ ip pim sparse-mode
+ no shutdown
+
+interface fastEthernet 0/1
+ ip address 200.200.201.1 255.255.255.0
+ ip pim sparse-mode
+ no shutdown
+
+ip pim rp-address 200.200.200.2
+
+router eigrp 100
+ network 200.200.201.0
+ network 200.200.200.0
+```
+
+#### Ruter 3
+
+```
+ip multicast-routing
+
+interface fastEthernet 0/0
+ ip address 200.200.201.2 255.255.255.0
+ ip pim sparse-mode
+ no shutdown
+
+interface fastEthernet 0/1
+ ip address 200.200.211.1 255.255.255.0
+ ip pim sparse-mode
+ no shutdown
+
+ip pim rp-address 200.200.200.2
+
+router eigrp 100
+ network 200.200.201.0
+ network 200.200.211.0
+```
+
+---
+
+### Krok 5 – Weryfikacja konfiguracji RP i PIM
+
+```
+Router# show ip pim rp
+Router# show ip pim rp mapping
+Router# show ip pim neighbor
+```
+
+---
+
+### Krok 6 – Testy (analogicznie do Zadania B)
+
+Przeprowadź te same eksperymenty co w PIM Dense Mode:
+- uruchomienie transmisji VLC między PC1 i PC2
+- sprawdzenie tablic multicast (`show ip mroute`)
+- wyrejestrowanie odbiorcy i obserwacja zachowania
+- czyszczenie tablic i zamiana ról
+
+---
+
+## Zestawienie przydatnych komend
+
+| Komenda | Opis |
+|---|---|
+| `show ip igmp snooping` | Stan IGMP Snooping na przełączniku |
+| `show ip igmp snooping group` | Grupy multicast w przełączniku |
+| `show ip igmp snooping querier` | Informacje o IGMP Querier |
+| `show ip igmp snooping mrouter` | Port rutera multicast |
+| `show ip mroute` | Tablica routingu multicast |
+| `show ip mroute summary` | Skrót tablicy routingu multicast |
+| `show ip mroute active` | Aktywne strumienie multicast |
+| `show ip mroute pruned` | Wstrzymane strumienie (prune) |
+| `show ip mroute count` | Liczniki multicast |
+| `show ip igmp groups` | Grupy IGMP zarejestrowane w ruterze |
+| `show ip igmp membership` | Członkostwo w grupach IGMP |
+| `show ip pim rp` | Informacje o Rendezvous Point |
+| `show ip pim rp mapping` | Mapowanie grup do RP |
+| `show ip pim neighbor` | Sąsiedzi PIM |
+| `show ip pim interface count` | Liczniki PIM na interfejsach |
+| `clear ip mroute *` | Czyszczenie tablicy multicast |
+| `clear ip igmp group` | Czyszczenie grup IGMP |
+
+---
+
+## Różnice: Dense Mode vs Sparse Mode
+
+| Cecha | Dense Mode | Sparse Mode |
+|---|---|---|
+| Tryb działania | Push (rozgłoszenie do wszystkich) | Pull (na żądanie) |
+| Rendezvous Point | Nie wymagany | Wymagany |
+| Domyślne zachowanie | Ruch wysyłany wszędzie | Ruch wysyłany tylko tam gdzie potrzeba |
+| Wydajność | Niska (dużo zbędnego ruchu) | Wysoka |
+| Złożoność konfiguracji | Prosta | Wymaga wskazania RP |
+| Komunikaty prune | Tak (wstrzymanie niepotrzebnego ruchu) | Nie są potrzebne |
+| Zastosowanie | Małe sieci, gęste grupy odbiorców | Duże sieci, rzadko rozmieszczeni odbiorcy |
