@@ -601,4 +601,166 @@ Zmienia matematyczny "silnik" oceniający jakość podziału.
 
 - W regresji: Wybór to najczęściej squared_error (Błąd średniokwadratowy - MSE) lub absolute_error (Średni błąd bezwzględny - MAE). MSE mocniej karze duże odchylenia (outliery).
 
+### Czy drzewa są modelami parametrycznymi
+
+Krótka i treściwa odpowiedź brzmi: Nie, drzewa decyzyjne są modelami nieparametrycznymi.
+
+W uczeniu maszynowym rozróżnienie na modele parametryczne i nieparametryczne nie dotyczy tego, czy model "ma jakieś parametry" (bo prawie każdy ma), ale tego, jak ich liczba i struktura zmieniają się wraz z danymi.
+
+Oto dlaczego drzewa zaliczamy do grupy modeli nieparametrycznych:
+
+1. Brak założeń dotyczących rozkładu danych
+Modele parametryczne (np. regresja liniowa czy logistyczna) z góry zakładają postać funkcji, którą próbują dopasować do danych (np. że zależność jest liniowa). Muszą "zmieścić" dane w konkretny, sztywny wzór.
+
+Drzewa decyzyjne nie robią żadnych założeń co do kształtu relacji między cechami a celem. Nie zakładają, że dane mają rozkład normalny czy że granica decyzyjna jest prostą linią.
+
+2. Złożoność zależna od wielkości zbioru danych
+W modelach parametrycznych liczba parametrów (wag) jest stała i znana przed rozpoczęciem treningu (np. w regresji liniowej masz dokładnie tyle wag, ile jest cech + wyraz wolny).
+
+W drzewach decyzyjnych:
+
+- Struktura modelu (liczba węzłów, głębokość, podziały) powstaje dopiero w trakcie treningu.
+
+- Im więcej masz danych i im bardziej są one złożone, tym "większe" i bardziej skomplikowane może stać się drzewo (jeśli go nie ograniczysz). Liczba "parametrów" (splitów) rośnie więc wraz z danymi.
+
+3. Elastyczność
+Modele nieparametryczne są zazwyczaj znacznie bardziej elastyczne. Drzewa potrafią idealnie dopasować się do danych treningowych (nawet za bardzo, co prowadzi do overfittingu), ponieważ mogą dzielić przestrzeń cech na coraz mniejsze "pudełka", aż uchwycą każdą zależność.
+
+### Czym jest F1 score
+
+F1 Score to jedna z najważniejszych metryk oceny modeli klasyfikacji w uczeniu maszynowym. Jest to średnia harmoniczna precyzji (Precision) oraz czułości (Recall).
+
+Stosuje się ją głównie wtedy, gdy zależy nam na znalezieniu złotego środka między tymi dwiema wartościami, szczególnie w sytuacjach, gdy mamy do czynienia z niezbalansowanymi zbiorami danych (np. wykrywanie rzadkich chorób lub oszustw bankowych).
+
+1. Składniki F1 Score
+
+Aby zrozumieć F1 Score, musisz najpierw znać jego dwa filary:
+
+- Precyzja (Precision): Odpowiada na pytanie: „Z wszystkich przypadków, które model oznaczył jako pozytywne, ile faktycznie nimi było?”. Skupia się na unikaniu błędów typu False Positive (fałszywych alarmów).Czułość 
+
+- (Recall / Sensitivity): Odpowiada na pytanie: „Z wszystkich faktycznie pozytywnych przypadków, ile model zdołał poprawnie wykryć?”. Skupia się na unikaniu błędów typu False Negative (przeoczeń).
+
+2. Wzór matematycznyF1 Score obliczamy za pomocą średniej harmonicznej:$$F1 = 2 \cdot \frac{\text{Precision} \cdot \text{Recall}}{\text{Precision} + \text{Recall}}$$
+
+Dlaczego średnia harmoniczna, a nie zwykła (arytmetyczna)?
+
+Średnia harmoniczna bardzo "karze" niskie wartości. Jeśli jedna z metryk (np. Precision) wynosi 0, F1 Score również wyniesie 0, nawet jeśli Recall wynosi 1. To sprawia, że F1 jest bardzo bezpiecznym wskaźnikiem – wysoki wynik F1 oznacza, że model radzi sobie dobrze na obu polach.
+
+3. Kiedy używać F1 Score zamiast Accuracy (Dokładności)?
+
+Wyobraź sobie test na rzadką chorobę, która występuje u 1 na 1000 osób.Jeśli model zawsze mówi "Jesteś zdrowy", jego Accuracy wyniesie 99,9%. Brzmi świetnie, ale model jest bezużyteczny, bo nie wykrył żadnego chorego.
+
+W takim przypadku jego Recall wyniesie 0, a co za tym idzie – F1 Score również wyniesie 0. F1 Score natychmiast obnaży fakt, że model kompletnie zawodzi w wykrywaniu klasy pozytywnej.
+
+### Zalety i wady drzew decyzyjnych
+
+1. Zalety drzew decyzyjnych
+
+- Wysoka interpretowalność: Model można przedstawić graficznie w formie schematu blokowego. Nawet osoba bez wiedzy technicznej zrozumie, dlaczego model podjął taką, a nie inną decyzję.
+
+- Minimalne przygotowanie danych: * Nie wymagają skalowania ani normalizacji cech (w przeciwieństwie do SVM czy KNN).
+
+- Radzą sobie z brakującymi wartościami (zależy od implementacji).
+
+- Obsługują zarówno dane liczbowe, jak i kategoryczne.
+
+- Naturalna selekcja cech: Podczas budowy drzewa, algorytm sam wybiera najbardziej istotne zmienne, umieszczając je na górze (w korzeniu i pierwszych węzłach).
+
+- Modelowanie nieliniowości: Drzewa świetnie radzą sobie z wykrywaniem skomplikowanych, nieliniowych zależności między cechami bez konieczności ręcznej transformacji danych.
+
+- Odporność na wartości odstające (outliers): Ponieważ drzewa dzielą dane na przedziały, pojedynczy rekord o ekstremalnej wartości ma zazwyczaj ograniczony wpływ na strukturę całego modelu.
+
+2. Wady drzew decyzyjnych
+
+- Tendencja do przeuczenia (Overfitting): To największa bolączka. Bez nałożenia ograniczeń (np. maksymalnej głębokości), drzewo będzie rosło tak długo, aż idealnie zapamięta zbiór treningowy, tracąc zdolność do generalizacji na nowych danych.
+
+- Niestabilność (Wysoka wariancja): Mała zmiana w danych treningowych może skutkować budową zupełnie innego drzewa. Jeden nowy rekord może zmienić główny podział w korzeniu, co zburzy całą dalszą strukturę.
+
+- Problemy z diagonalnymi zależnościami: Drzewa dzielą przestrzeń zawsze prostopadle do osi (poziomo lub pionowo). Jeśli zależność w danych jest ukośna, drzewo musi stworzyć mnóstwo małych "schodków", by ją odwzorować, co jest mało efektywne.
+
+- Brak płynności (w regresji): Drzewa regresyjne nie przewidują wartości w sposób ciągły, lecz "skokowy" (średnia z liścia). Nie potrafią też przewidywać wartości spoza zakresu widzianego w treningu (brak ekstrapolacji).
+
+- Dominacja cech o wielu poziomach: Algorytmy drzewiaste mają tendencję do preferowania cech kategorycznych, które mają bardzo dużo unikalnych wartości (np. ID użytkownika), co może prowadzić do błędnych wniosków.
+
+### Jaki wpływ ma głębokość na drzewa
+
+1. Płytkie drzewo (Mała głębokość)
+Gdy drzewo ma tylko 1-3 poziomy głębokości, jest bardzo proste. Takie drzewo nazywamy czasem „pniakiem decyzyjnym” (decision stump), jeśli ma tylko jeden poziom.
+
+Zaleta: Bardzo małe ryzyko przeuczenia (Low Variance). Model jest stabilny i łatwy do zrozumienia.
+
+Wada: Zbyt duże uproszczenie (High Bias). Model może nie zauważyć ważnych zależności w danych, co prowadzi do underfittingu (niedouczenia).
+
+Przykład: Jeśli drzewo o głębokości 1 ma przewidzieć cenę domu tylko na podstawie metrażu, zignoruje lokalizację, rok budowy i standard, dając bardzo niedokładny wynik.
+
+2. Głębokie drzewo (Duża głębokość)
+Głębokie drzewo tworzy bardzo specyficzne reguły dla małych grup danych.
+
+Zaleta: Bardzo wysoka precyzja na zbiorze treningowym (Low Bias). Model potrafi wychwycić nawet najbardziej subtelne i nieliniowe korelacje.
+
+Wada: Ekstremalnie wysokie ryzyko overfittingu (przeuczenia / High Variance). Drzewo zaczyna "uczyć się na pamięć" szumu i błędów w danych treningowych zamiast ogólnych trendów.
+
+Wynik: Model ma 100% skuteczności na danych, które już widział, ale kompletnie gubi się na danych testowych.
+
+3. Kluczowy balans: Bias-Variance Tradeoff
+Wpływ głębokości najlepiej obrazuje poniższa tabela, pokazująca, jak zmieniają się błędy w zależności od tego, jak głęboko pozwolimy drzewu "rosnąć":
+
+![alt text](image-6.png)
+
+Jak kontrolować głębokość?
+
+W praktyce rzadko zostawia się drzewom "wolną rękę". Stosuje się techniki takie jak:
+
+- Early Stopping: Ustalenie sztywnego max_depth.
+
+- Pruning (Przycinanie): Pozwolenie drzewu urosnąć, a następnie usuwanie gałęzi, które wnoszą bardzo mało do ogólnej trafności modelu.
+
+- Min Samples Split: Określenie, że w węźle musi być co najmniej $N$ obserwacji, aby można było go dalej dzielić.
+
+Złota zasada: Zawsze monitoruj błąd na zbiorze walidacyjnym. Jeśli błąd na treningu spada, a na walidacji zaczyna rosnąć – to znak, że Twoje drzewo jest już za głębokie.
+
+### Różnica między F1 scora a Accuracy
+
+Różnica między Accuracy (Dokładnością) a F1 Score to klasyczny problem "liczb, które kłamią". Choć obie metryki mierzą skuteczność modelu, robią to z zupełnie innej perspektywy.
+
+W skrócie: Accuracy mówi Ci, jak często model ma rację ogółem, a F1 Score mówi Ci, jak dobrze model radzi sobie z konkretnym zadaniem (zazwyczaj tym trudniejszym), nie dając się zwieść statystykom.
+
+1. Accuracy (Dokładność)
+
+To najbardziej intuicyjna miara. Odpowiada na pytanie: „Ile procent wszystkich przewidywań było trafionych?”.
+
+$$Accuracy = \frac{\text{Poprawne przewidywania (TP + TN)}}{\text{Wszystkie przypadki}}$$
+
+- Kiedy działa: Tylko wtedy, gdy klasy w Twoim zbiorze są zbalansowane (np. masz 500 zdjęć psów i 500 zdjęć kotów).
+
+- Kiedy zawodzi: Gdy jedna klasa dominuje nad drugą (tzw. class imbalance).
+
+2. F1 ScoreTo średnia harmoniczna Precyzji (Precision) i Czułości (Recall). Nie bierze pod uwagę wyników negatywnych, które model przewidział poprawnie jako negatywne (TN), skupiając się całkowicie na klasie pozytywnej (tej, na której nam zależy).
+
+$$F1 = 2 \cdot \frac{\text{Precision} \cdot \text{Recall}}{\text{Precision} + \text{Recall}}$$
+
+- Kiedy działa: Zawsze, a zwłaszcza gdy zbiór jest niezbalansowany.
+
+- Kiedy zawodzi: Gdy obie klasy są dla Ciebie tak samo ważne i nie chcesz ignorować trafności w klasie negatywnej (choć to rzadki przypadek).
+
+Bezpośrednie porównanie: Przykład "Test na rzadką chorobę"
+
+Wyobraź sobie, że badasz 1000 osób pod kątem rzadkiej choroby. Wiemy, że 10 osób jest chorych, a 990 osób jest zdrowych.
+
+- Scenariusz: Twój model jest leniwy i zawsze mówi "Jesteś zdrowy"
+
+- Accuracy: Model trafił 990 razy na 1000. Wynik: 99%. Brzmi jak genialny model, prawda? W rzeczywistości jest bezużyteczny, bo nie wykrył nikogo chorego.
+
+- F1 Score: Ponieważ model nie wykrył żadnego chorego, jego Recall wynosi 0. To sprawia, że F1 Score wynosi 0.F1 Score od razu pokazuje, że model „poległ”, podczas gdy Accuracy gratuluje mu sukcesu.
+
+---
+
+## Z lab6
+
+### Czym są enseble methods w ML
+
+### Hard Voting i Soft Voting
+
+### Bagging i Pasting
+
 ---
