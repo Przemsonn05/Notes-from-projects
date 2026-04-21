@@ -3031,76 +3031,188 @@ exit
 > **Tip końcowy:** Zawsze po wprowadzeniu zmian poczekaj ~30-60 sekund na konwergencję protokołów rutowania, zanim zaczniesz diagnozować. Protokoły potrzebują czasu na wymianę informacji o trasach.
 
 
-# LAB 010 – IP Multicast w Cisco IOS
+# Laboratorium 010 – IP Multicast: Notatka krok po kroku
 
-> **Tematyka:** IGMP Snooping, IP PIM Dense Mode, IP PIM Sparse Mode / Rendezvous Points
-
----
-
-## Zadanie A – Protokół IGMP i IGMP Snooping w przełączniku Ethernet
-
-### Topologia
-
-```
-[PC1] ──┐
-        ├── [Switch Cisco] ── [Router Cisco]
-[PC2] ──┘
-```
-
-Zdefiniuj adresację IP unicast dla całej sieci (np. `192.168.1.0/24`).
+> **Cel laboratorium:** Poznanie protokołu IGMP, funkcji IGMP Snooping w przełącznikach, oraz rutowania multicast w trybach PIM Dense Mode i PIM Sparse Mode.
 
 ---
 
-### Krok 1 – Włącz IGMP Snooping w przełączniku
+## 🖥️ Praca na 2 fizycznych komputerach – jak się przełączać?
+
+W laboratorium masz do dyspozycji **dwa fizyczne PC** (nazwijmy je **FizycznyPC-A** i **FizycznyPC-B**). Symulowane urządzenia (Switch, Router, PC1, PC2) działają w środowisku **Cisco Packet Tracer** lub **GNS3** – oprogramowanie to uruchamiasz na jednym z fizycznych komputerów.
+
+### Podział pracy
+
+| Fizyczny komputer | Co na nim robisz |
+|-------------------|-----------------|
+| **FizycznyPC-A** | Otwierasz Packet Tracer / GNS3, konfigurujesz Switch i Routery przez konsolę w symulatorze. Możesz też uruchomić VLC jako nadawcę (PC1 w symulacji). |
+| **FizycznyPC-B** | Uruchamiasz VLC jako odbiorca (PC2 w symulacji) lub Wireshark do obserwacji ruchu. |
+
+> 💡 **Jeśli robisz całe lab na jednym fizycznym PC:** uruchom dwie instancje VLC (jedną jako nadawcę, drugą jako odbiorcę) i Wireshark – wszystko działa lokalnie w ramach symulatora.
+
+### Jak przełączać się między urządzeniami w Packet Tracer / GNS3?
+
+**W Cisco Packet Tracer:**
+- Kliknij ikonę urządzenia (Switch, Router) na schemacie → otwiera się okno z zakładkami **CLI** (linia komend) i **Config**.
+- Każde urządzenie ma **osobne okno CLI** – możesz mieć kilka otwartych jednocześnie.
+- Przełączasz się klikając w odpowiednie okno na ekranie.
+
+**W GNS3:**
+- Kliknij prawym przyciskiem myszy na urządzenie → **Console** → otwiera się terminal.
+- Możesz mieć wiele terminali otwartych obok siebie.
+
+### Jak uruchomić VLC na fizycznym PC (jako PC1 lub PC2)?
+
+Jeśli lab odbywa się na **prawdziwym sprzęcie** (nie w symulatorze):
+- **FizycznyPC-A** = PC1 → uruchamiasz komendę nadawcy VLC
+- **FizycznyPC-B** = PC2 → uruchamiasz komendę odbiorcy VLC
+- Oba PC są podłączone do fizycznego Switcha i Routera
+
+### Legenda oznaczeń w tej notatce
+
+Każdy krok jest oznaczony, kto go wykonuje:
+
+| Oznaczenie | Gdzie wpisujesz komendę |
+|------------|------------------------|
+| `🖥️ PC1` | Na komputerze będącym nadawcą (FizycznyPC-A lub okno PC1 w symulatorze) |
+| `🖥️ PC2` | Na komputerze będącym odbiorcą (FizycznyPC-B lub okno PC2 w symulatorze) |
+| `🔀 Switch` | W oknie CLI przełącznika (w Packet Tracer kliknij Switch → CLI) |
+| `📡 Router` | W oknie CLI rutera (w Packet Tracer kliknij Router → CLI) |
+| `🔍 Wireshark` | Program uruchamiasz na PC1 lub PC2 (dowolnym) |
+
+---
+
+## Podstawy teoretyczne – czym jest IP Multicast?
+
+- **Unicast** – jeden nadawca, jeden odbiorca (np. zwykła strona www).
+- **Broadcast** – jeden nadawca, wszyscy w sieci.
+- **Multicast** – jeden nadawca, wybrana grupa odbiorców. Oszczędza przepustowość – strumień jest wysyłany tylko raz, a sieć sama rozgałęzia go do zainteresowanych.
+
+Adresy multicast należą do zakresu **224.0.0.0 – 239.255.255.255** (klasa D).
+
+Protokoły używane w tym lab:
+- **IGMP** *(Internet Group Management Protocol)* – hosty rejestrują się do grup multicast w ruterze.
+- **PIM** *(Protocol Independent Multicast)* – rutery ustalają między sobą ścieżki dla ruchu multicast.
+
+---
+
+## Zadanie A – IGMP Snooping w przełączniku Ethernet
+
+### Topologia sieci
 
 ```
+   PC1 ──┐
+         ├── Switch Cisco ── Router Cisco
+   PC2 ──┘
+```
+
+- **PC1** – nadawca strumienia multicast (źródło)
+- **PC2** – odbiorca strumienia multicast
+- **Switch** – przełącznik z funkcją IGMP Snooping
+- **Router** – pełni rolę **IGMP Querier** (odpytuje hosty o przynależność do grup multicast)
+
+### Przykładowa adresacja IP
+
+| Urządzenie | Interfejs | Adres IP         |
+|------------|-----------|------------------|
+| PC1        | eth0      | 192.168.1.10/24  |
+| PC2        | eth0      | 192.168.1.20/24  |
+| Router     | fa 0/0    | 192.168.1.1/24   |
+
+### Krok 1 – Włącz IGMP Snooping na przełączniku
+
+> **🔀 Switch** – wpisz w oknie CLI przełącznika (Packet Tracer: kliknij Switch → zakładka CLI)
+
+```
+Switch> enable
+Switch# configure terminal
 Switch(config)# ip igmp snooping
+Switch(config)# end
 ```
 
-> Można też włączyć dla konkretnego VLANu:
-> `Switch(config)# ip igmp snooping vlan <ID>`
+**Co to robi?** IGMP Snooping powoduje, że przełącznik „podsłuchuje" wiadomości IGMP wymieniane między hostami a ruterem. Dzięki temu wie, na których portach są odbiorcy danej grupy multicast i wysyła ruch tylko tam – a nie na wszystkie porty (jak to byłoby w przypadku broadcastu).
 
----
+**Bez IGMP Snooping:** ruch multicast jest traktowany jak broadcast – dociera do wszystkich portów, nawet do tych, które nie są zainteresowane.
 
-### Krok 2 – Konfiguracja rutera (IGMP Querier + PIM Dense Mode)
+### Krok 2 – Skonfiguruj Router jako IGMP Querier
 
-Ruter musi działać jako **IGMP Querier**, żeby przełącznik mógł podsłuchiwać komunikację IGMP i kierować ruch multicast tylko do właściwych portów.
+> **📡 Router** – wpisz w oknie CLI rutera (Packet Tracer: kliknij Router → zakładka CLI)
+
+Ruter musi być podłączony do tego samego segmentu sieci co PC-ty. Następnie uruchom na nim rutowanie multicast i PIM na interfejsie:
 
 ```
+Router> enable
+Router# configure terminal
 Router(config)# ip multicast-routing
-Router(config)# interface fastEthernet 0/0
+Router(config)# interface fa 0/0
+Router(config-if)# ip address 192.168.1.1 255.255.255.0
 Router(config-if)# ip pim dense-mode
 Router(config-if)# no shutdown
+Router(config-if)# end
 ```
 
----
+**Co to robi:**
+- `enable` – wchodzi w tryb uprzywilejowany (z `>` na `#`).
+- `configure terminal` – wchodzi w tryb konfiguracji globalnej.
+- `ip multicast-routing` – włącza globalne rutowanie multicast na ruterze.
+- `ip pim dense-mode` – włącza protokół PIM na interfejsie (tutaj tylko do obsługi IGMP Querier).
+- Ruter automatycznie staje się **IGMP Querier** i regularnie pyta hosty: *„Kto chce odbierać ruch multicast?"*
 
-### Krok 3 – Uruchomienie źródła multicast (PC1 – nadawca)
+### Krok 3 – Skonfiguruj adresy IP na PC1 i PC2
 
-Użyj VLC Player z linii komend:
+> **🖥️ PC1** (FizycznyPC-A lub okno PC1 w symulatorze)
 
-```bash
-vlc.exe <plik> :sout=#rtp{dst=224.1.1.1,port=5004,mux=ts,ttl=10} :sout-all :sout-keep --repeat
+W Packet Tracer: kliknij PC1 → zakładka **Desktop** → **IP Configuration** i ustaw:
+- IP: `192.168.1.10`
+- Maska: `255.255.255.0`
+- Brama: `192.168.1.1`
+
+Na prawdziwym systemie Windows (cmd jako Administrator):
+```cmd
+netsh interface ip set address "Ethernet" static 192.168.1.10 255.255.255.0 192.168.1.1
 ```
 
-- `dst=224.1.1.1` – adres grupy multicast
-- `port=5004` – port RTP
-- `mux=ts` – MPEG2 Transport Stream
-- `ttl=10` – Time To Live (musi być > liczby przeskoków przez rutery!)
+> **🖥️ PC2** (FizycznyPC-B lub okno PC2 w symulatorze) – analogicznie:
+- IP: `192.168.1.20`
+- Maska: `255.255.255.0`
+- Brama: `192.168.1.1`
 
-> ⚠️ Domyślne TTL wynosi 1 – zmiana możliwa **tylko z linii komend**, nie przez GUI VLC.
+### Krok 4 – Uruchom źródło multicast na PC1 (VLC Player)
 
----
+> **🖥️ PC1** – uruchom w wierszu poleceń (cmd) na FizycznymPC-A
 
-### Krok 4 – Uruchomienie odbiorcy multicast (PC2 – odbiorca)
+```cmd
+vlc.exe C:\video\film.mp4 :sout=#rtp{dst=224.1.1.1,port=5004,mux=ts,ttl=10} :sout-all :sout-keep --repeat
+```
 
-```bash
+Zamień `C:\video\film.mp4` na rzeczywistą ścieżkę do pliku wideo.
+
+**Wyjaśnienie parametrów:**
+| Parametr | Znaczenie |
+|----------|-----------|
+| `plik` | Ścieżka do pliku wideo/audio |
+| `dst=224.1.1.1` | Docelowy adres grupy multicast |
+| `port=5004` | Port UDP, na którym wysyłany jest strumień |
+| `mux=ts` | Format strumienia: MPEG2 Transport Stream (TS) – dedykowany do transmisji przez sieć |
+| `ttl=10` | Time To Live – ile razy datagram może przejść przez rutery; **musi być > 1**, bo domyślna wartość 1 powoduje, że ruch nie przechodzi przez żaden ruter |
+| `:sout-all` | Wysyłaj do wszystkich wyjść |
+| `--repeat` | Zapętlaj plik |
+
+> ⚠️ **Uwaga:** TTL > 1 jest konieczne, gdy ruch ma przejść przez rutery. Domyślna wartość TTL=1 to absolutne minimum – przy niej datagram „ginie" na pierwszym ruterze.
+
+### Krok 5 – Uruchom odbiorcę na PC2 (VLC Player)
+
+> **🖥️ PC2** – uruchom w wierszu poleceń (cmd) na FizycznymPC-B
+
+```cmd
 vlc.exe rtp://224.1.1.1:5004
 ```
 
----
+PC2 dołącza do grupy multicast `224.1.1.1` i odbiera strumień RTP na porcie 5004. Jeśli wszystko działa poprawnie, powinno pojawić się okno odtwarzacza z obrazem.
 
-### Krok 5 – Weryfikacja IGMP Snooping w przełączniku
+### Krok 6 – Sprawdź stan IGMP Snooping na przełączniku
+
+> **🔀 Switch** – wróć do okna CLI przełącznika
 
 ```
 Switch# show ip igmp snooping
@@ -3109,119 +3221,148 @@ Switch# show ip igmp snooping querier
 Switch# show ip igmp snooping mrouter
 ```
 
----
+**Co pokaże każda komenda:**
+- `show ip igmp snooping` – ogólny stan funkcji (czy włączona, dla których VLANów).
+- `show ip igmp snooping group` – lista grup multicast i portów, do których są przypisani odbiorcy.
+- `show ip igmp snooping querier` – informacja o ruterze IGMP Querier w segmencie.
+- `show ip igmp snooping mrouter` – port, przez który podłączony jest ruter multicast.
 
-### Krok 6 – Obserwacje i testy
+### Krok 7 – Obserwacja w Wireshark
 
-- Sprawdź (Wireshark), do których portów trafia ruch multicast przy **włączonym** i **wyłączonym** IGMP Snooping.
-- Zwróć uwagę na adresację IP i MAC ramek Ethernet przenoszących ruch multicast.
+> **🔍 Wireshark** – uruchom na FizycznymPC-A lub FizycznymPC-B (najlepiej PC2, żeby widzieć przychodzący ruch)
 
-Wyłączenie IGMP Snooping:
+Uruchom Wireshark, wybierz właściwy interfejs sieciowy i zastosuj filtr:
+```
+igmp or udp.port == 5004
+```
+
+Zwróć uwagę na:
+- **Ramki IGMP** – wiadomości Membership Query (ruter pyta), Membership Report (host odpowiada), Leave (host opuszcza grupę).
+- **Datagramy IP multicast** – docelowy adres IP to adres grupy (np. 224.1.1.1), a adres MAC to specjalny adres multicast Ethernet (postać `01:00:5E:xx:xx:xx`).
+
+### Krok 8 – Wyłącz odbiorcę i obserwuj zachowanie
+
+> **🖥️ PC2** – zamknij VLC (odbiorca przestaje być członkiem grupy)
+
+> **🔀 Switch** – wróć do CLI i przetestuj oba scenariusze:
+
+**Z wyłączonym IGMP Snooping:**
 ```
 Switch(config)# no ip igmp snooping
 ```
+Ruch multicast trafia na wszystkie porty (jak broadcast) – Wireshark na PC2 nadal widzi pakiety mimo zamkniętego VLC.
 
-Włączenie z powrotem:
+**Z włączonym IGMP Snooping:**
 ```
 Switch(config)# ip igmp snooping
 ```
+Ruch multicast zostaje ograniczony tylko do portu rutera (nikt inny nie jest zarejestrowany) – Wireshark na PC2 nie widzi pakietów multicast.
 
-Czyszczenie grup IGMP w ruterze:
+> **📡 Router** – wyczyść grupy IGMP:
 ```
 Router# clear ip igmp group
 ```
 
 ---
 
-## Zadanie B – IP PIM Dense Mode (Push Mode)
+## Zadanie B – PIM Dense Mode (tryb push)
 
-### Topologia
+### Zasada działania
 
-```
-[PC1] ── [R1] ── [R2 (środkowy)] ── [R3] ── [PC2]
-          |            |                |
-     200.200.210.0  200.200.200.0  200.200.201.0  200.200.211.0
-```
+**Dense Mode = „push mode"** – ruter zakłada, że wszystkie węzły chcą odbierać ruch multicast i rozgłasza go wszędzie. Rutery, które nie potrzebują ruchu, wysyłają komunikat **Prune** (wstrzymaj). Mniej wydajny, ale prostszy w konfiguracji.
 
-> PIM Dense Mode = ruch multicast rozgłaszany do **wszystkich** ruterów. Rutery niepotrzebujące ruchu wysyłają komunikaty **prune** (wstrzymaj).
-
----
-
-### Krok 1 – Włącz rutowanie multicast na każdym ruterze
+### Topologia sieci
 
 ```
-Router(config)# ip multicast-routing
+PC1 ── Router1 ── (sieć 200.200.200.0/24) ── Router2 ── (sieć 200.200.201.0/24) ── Router3 ── PC2
+         |                                      |                                        |
+  200.200.210.0/24                              |                                 200.200.211.0/24
+         |                              (środkowy, łączy obie strony)
 ```
 
----
+Szczegółowa adresacja:
 
-### Krok 2 – Włącz PIM Dense Mode na każdym interfejsie (na trasie multicast)
+| Router | Interfejs | Adres IP            | Sieć                   |
+|--------|-----------|---------------------|------------------------|
+| R1     | fa 0/0    | 200.200.200.1/24    | łącze do R2            |
+| R1     | fa 0/1    | 200.200.210.1/24    | sieć PC1               |
+| R2     | fa 0/0    | 200.200.200.2/24    | łącze do R1            |
+| R2     | fa 0/1    | 200.200.201.1/24    | łącze do R3            |
+| R3     | fa 0/0    | 200.200.201.2/24    | łącze do R2            |
+| R3     | fa 0/1    | 200.200.211.1/24    | sieć PC2               |
+
+### Jak podłączyć sprzęt
+
+1. PC1 podłącz do fa 0/1 Router1 (lub do switcha, który jest pod R1).
+2. Router1 fa 0/0 podłącz do Router2 fa 0/0 (łącze bezpośrednie lub przez switch).
+3. Router2 fa 0/1 podłącz do Router3 fa 0/0.
+4. PC2 podłącz do fa 0/1 Router3.
+
+### Konfiguracja Router1
+
+> **📡 Router1** – otwórz CLI Router1 w symulatorze
 
 ```
-Router(config)# interface fastEthernet 0/0
-Router(config-if)# ip pim dense-mode
-Router(config-if)# no shutdown
-
-Router(config)# interface fastEthernet 0/1
-Router(config-if)# ip pim dense-mode
-Router(config-if)# no shutdown
-```
-
----
-
-### Krok 3 – Gotowe konfiguracje ruterów
-
-#### Ruter 1
-
-```
+Router> enable
+Router# configure terminal
 ip multicast-routing
 
-interface fastEthernet 0/0
+interface fa 0/0
  ip address 200.200.200.1 255.255.255.0
  ip pim dense-mode
  no shutdown
 
-interface fastEthernet 0/1
+interface fa 0/1
  ip address 200.200.210.1 255.255.255.0
  ip pim dense-mode
  no shutdown
 
 router eigrp 100
- network 200.200.210.0
  network 200.200.200.0
+ network 200.200.210.0
+end
 ```
 
-#### Ruter 2 (środkowy)
+### Konfiguracja Router2 (środkowy)
+
+> **📡 Router2** – otwórz CLI Router2 w symulatorze (osobne okno)
 
 ```
+Router> enable
+Router# configure terminal
 ip multicast-routing
 
-interface fastEthernet 0/0
+interface fa 0/0
  ip address 200.200.200.2 255.255.255.0
  ip pim dense-mode
  no shutdown
 
-interface fastEthernet 0/1
+interface fa 0/1
  ip address 200.200.201.1 255.255.255.0
  ip pim dense-mode
  no shutdown
 
 router eigrp 100
- network 200.200.201.0
  network 200.200.200.0
+ network 200.200.201.0
+end
 ```
 
-#### Ruter 3
+### Konfiguracja Router3
+
+> **📡 Router3** – otwórz CLI Router3 w symulatorze (osobne okno)
 
 ```
+Router> enable
+Router# configure terminal
 ip multicast-routing
 
-interface fastEthernet 0/0
+interface fa 0/0
  ip address 200.200.201.2 255.255.255.0
  ip pim dense-mode
  no shutdown
 
-interface fastEthernet 0/1
+interface fa 0/1
  ip address 200.200.211.1 255.255.255.0
  ip pim dense-mode
  no shutdown
@@ -3229,128 +3370,115 @@ interface fastEthernet 0/1
 router eigrp 100
  network 200.200.201.0
  network 200.200.211.0
+end
 ```
 
----
+**Wyjaśnienie poleceń:**
+- `ip multicast-routing` – globalne włączenie obsługi multicast w ruterze.
+- `ip pim dense-mode` na interfejsie – włącza PIM DM na tym interfejsie; ruter będzie aktywnie uczestniczył w rozgłaszaniu i przycinaniu ruchu multicast.
+- `router eigrp 100` + `network` – rutowanie unicast (konieczne, żeby rutery „wiedziały" o sobie nawzajem i mogły zestawić ścieżki multicast).
 
-### Krok 4 – Weryfikacja stanu multicast
+### Uruchom transmisję multicast
+
+> **🖥️ PC1** (FizycznyPC-A) – nadawca:
+```cmd
+vlc.exe C:\video\film.mp4 :sout=#rtp{dst=224.1.1.1,port=5004,mux=ts,ttl=10} :sout-all :sout-keep --repeat
+```
+
+> **🖥️ PC2** (FizycznyPC-B) – odbiorca:
+```cmd
+vlc.exe rtp://224.1.1.1:5004
+```
+
+### Diagnostyka PIM Dense Mode
+
+> **📡 Router1 / Router2 / Router3** – te komendy wpisuj na każdym ruterze osobno, żeby porównać wyniki
 
 ```
 Router# show ip mroute
+```
+Pokazuje tablicę routingu multicast – wpisy (S,G) czyli źródło i grupę.
+
+```
 Router# show ip igmp groups
-Router# show ip igmp membership
+```
+Grupy multicast, do których dołączyli hosty w sieciach bezpośrednio podłączonych.
+
+```
 Router# show ip mroute summary
 Router# show ip mroute active
 Router# show ip mroute count
-Router# show interfaces summary
 ```
-
----
-
-### Krok 5 – Wyrejestrowanie odbiorcy i sprawdzenie pruned
-
-Zamknij aplikację odbiorcy na PC2, następnie sprawdź wstrzymane strumienie:
+Skróty i statystyki ruchu multicast.
 
 ```
 Router# show ip mroute pruned
 ```
+Pokazuje strumienie wstrzymane (Prune) – gdy ostatni odbiorca opuścił grupę.
 
----
+### Symulacja fikcyjnego źródła multicast
 
-### Krok 6 – Symulacja fikcyjnego źródła multicast
-
-Można zdefiniować fikcyjne źródło podpięte do interfejsu rutera (nie emituje ruchu, ale figuruje w tablicy IP multicast):
+> **📡 Router1** – dodaj fikcyjne źródło:
 
 ```
-Router1(config)# interface fastEthernet 0/0
+Router1(config)# interface fa 0/0
 Router1(config-if)# ip igmp join-group 230.200.200.1
 ```
 
-Sprawdzenie dostępności z innego rutera:
-
+> **📡 Router2** – sprawdź dostępność:
 ```
 Router2# ping 230.200.200.1
 ```
 
-Diagnostyka:
+### Czyszczenie danych multicast
 
-```
-Router1# show ip pim interface count
-Router1# show ip mroute count
-```
-
----
-
-### Krok 7 – Zamiana ról nadawcy i odbiorcy / czyszczenie tablic
+> **📡 Router1 / Router2 / Router3** – wykonaj na każdym ruterze przed testem w odwrotnym kierunku:
 
 ```
 Router# clear ip mroute *
 Router# clear ip igmp groups
 ```
 
-> Po wyczyszczeniu tablic zamiana kierunku transmisji (PC2 → PC1) powinna być możliwa dla tej samej grupy multicast.
+Użyj do resetowania tablicy, gdy chcesz przetestować transmisję w odwrotnym kierunku (zamiana ról PC1 i PC2):
+- **PC2** (FizycznyPC-B) staje się nadawcą – uruchamiasz tam komendę VLC nadawcy
+- **PC1** (FizycznyPC-A) staje się odbiorcą – uruchamiasz tam komendę VLC odbiorcy
 
 ---
 
-## Zadanie C – IP PIM Sparse Mode (Pull Mode)
+## Zadanie C – PIM Sparse Mode (tryb pull)
 
-### Koncepcja
+### Zasada działania
 
-- **Sparse Mode** = ruch multicast pobierany **na żądanie**.
-- Wiedza o lokalizacji źródeł przechowywana jest w **Rendezvous Point (RP)**.
-- Każdy ruter musi znać adres IP rutera RP.
-- Rutery zgłaszają do RP znane im źródła multicast.
-- Gdy ruter otrzyma zgłoszenie IGMP od hosta, pobiera ruch od RP.
+**Sparse Mode = „pull mode"** – odwrotność Dense Mode. Ruter **nie** rozgłasza ruchu wszędzie. Zamiast tego:
 
----
+1. Jeden ruter pełni rolę **Rendezvous Point (RP)** – centralnego punktu spotkań nadawców i odbiorców.
+2. Nadawca rejestruje się w RP.
+3. Odbiorca (przez IGMP) informuje swój lokalny ruter, że chce dołączyć do grupy.
+4. Lokalny ruter zgłasza się do RP i pobiera ruch dopiero wtedy, gdy jest potrzebny.
 
-### Krok 1 – Włącz rutowanie multicast (tak samo jak wcześniej)
+**Zalety:** Bardziej efektywny przy rozległych sieciach z rzadko rozmieszczonymi odbiorcami.
 
-```
-Router(config)# ip multicast-routing
-```
+### Wymaganie dodatkowe: Rendezvous Point
 
----
+Każdy ruter **musi znać adres IP rutera RP** – nawet on sam (jeśli jest RP).
 
-### Krok 2 – Włącz PIM Sparse Mode na interfejsach
+W tym przykładzie RP to **Router2** (adres `200.200.200.2`).
 
-```
-Router(config)# interface fastEthernet 0/0
-Router(config-if)# ip pim sparse-mode
-Router(config-if)# no shutdown
+### Konfiguracja Router1
 
-Router(config)# interface fastEthernet 0/1
-Router(config-if)# ip pim sparse-mode
-Router(config-if)# no shutdown
-```
-
----
-
-### Krok 3 – Wskaż Rendezvous Point (RP) na każdym ruterze
-
-W tym przykładzie RP to Ruter 2 (adres `200.200.200.2`):
+> **📡 Router1** – CLI Router1
 
 ```
-Router(config)# ip pim rp-address 200.200.200.2
-```
-
-> ⚠️ Tę komendę należy wpisać na **każdym** ruterze – łącznie z samym RP!
-
----
-
-### Krok 4 – Gotowe konfiguracje ruterów
-
-#### Ruter 1
-
-```
+Router> enable
+Router# configure terminal
 ip multicast-routing
 
-interface fastEthernet 0/0
+interface fa 0/0
  ip address 200.200.200.1 255.255.255.0
  ip pim sparse-mode
  no shutdown
 
-interface fastEthernet 0/1
+interface fa 0/1
  ip address 200.200.210.1 255.255.255.0
  ip pim sparse-mode
  no shutdown
@@ -3358,21 +3486,26 @@ interface fastEthernet 0/1
 ip pim rp-address 200.200.200.2
 
 router eigrp 100
- network 200.200.210.0
  network 200.200.200.0
+ network 200.200.210.0
+end
 ```
 
-#### Ruter 2 (środkowy – Rendezvous Point)
+### Konfiguracja Router2 (RP – Rendezvous Point)
+
+> **📡 Router2** – CLI Router2 (ten ruter jest RP – wskazuje sam siebie jako `rp-address`)
 
 ```
+Router> enable
+Router# configure terminal
 ip multicast-routing
 
-interface fastEthernet 0/0
+interface fa 0/0
  ip address 200.200.200.2 255.255.255.0
  ip pim sparse-mode
  no shutdown
 
-interface fastEthernet 0/1
+interface fa 0/1
  ip address 200.200.201.1 255.255.255.0
  ip pim sparse-mode
  no shutdown
@@ -3380,21 +3513,26 @@ interface fastEthernet 0/1
 ip pim rp-address 200.200.200.2
 
 router eigrp 100
- network 200.200.201.0
  network 200.200.200.0
+ network 200.200.201.0
+end
 ```
 
-#### Ruter 3
+### Konfiguracja Router3
+
+> **📡 Router3** – CLI Router3
 
 ```
+Router> enable
+Router# configure terminal
 ip multicast-routing
 
-interface fastEthernet 0/0
+interface fa 0/0
  ip address 200.200.201.2 255.255.255.0
  ip pim sparse-mode
  no shutdown
 
-interface fastEthernet 0/1
+interface fa 0/1
  ip address 200.200.211.1 255.255.255.0
  ip pim sparse-mode
  no shutdown
@@ -3404,62 +3542,66 @@ ip pim rp-address 200.200.200.2
 router eigrp 100
  network 200.200.201.0
  network 200.200.211.0
+end
 ```
 
----
+**Wyjaśnienie kluczowej komendy:**
+```
+ip pim rp-address 200.200.200.2
+```
+Wskazuje adres Rendezvous Point. Musi być skonfigurowane na **każdym** ruterze w sieci, w tym na samym RP.
 
-### Krok 5 – Weryfikacja konfiguracji RP i PIM
+### Uruchom transmisję (tak samo jak w Dense Mode)
+
+> **🖥️ PC1** (FizycznyPC-A) – nadawca:
+```cmd
+vlc.exe C:\video\film.mp4 :sout=#rtp{dst=224.1.1.1,port=5004,mux=ts,ttl=10} :sout-all :sout-keep --repeat
+```
+
+> **🖥️ PC2** (FizycznyPC-B) – odbiorca:
+```cmd
+vlc.exe rtp://224.1.1.1:5004
+```
+
+### Diagnostyka PIM Sparse Mode
+
+> **📡 Router1 / Router2 / Router3** – sprawdzaj na każdym ruterze
 
 ```
 Router# show ip pim rp
+```
+Pokazuje aktualnie zarejestrowane Rendezvous Points i grupy, do których są przypisane.
+
+```
 Router# show ip pim rp mapping
+```
+Mapowanie grup multicast na Rendezvous Points.
+
+```
 Router# show ip pim neighbor
 ```
+Lista sąsiadów PIM (ruterów, z którymi nawiązano relację PIM).
 
 ---
 
-### Krok 6 – Testy (analogicznie do Zadania B)
-
-Przeprowadź te same eksperymenty co w PIM Dense Mode:
-- uruchomienie transmisji VLC między PC1 i PC2
-- sprawdzenie tablic multicast (`show ip mroute`)
-- wyrejestrowanie odbiorcy i obserwacja zachowania
-- czyszczenie tablic i zamiana ról
-
----
-
-## Zestawienie przydatnych komend
-
-| Komenda | Opis |
-|---|---|
-| `show ip igmp snooping` | Stan IGMP Snooping na przełączniku |
-| `show ip igmp snooping group` | Grupy multicast w przełączniku |
-| `show ip igmp snooping querier` | Informacje o IGMP Querier |
-| `show ip igmp snooping mrouter` | Port rutera multicast |
-| `show ip mroute` | Tablica routingu multicast |
-| `show ip mroute summary` | Skrót tablicy routingu multicast |
-| `show ip mroute active` | Aktywne strumienie multicast |
-| `show ip mroute pruned` | Wstrzymane strumienie (prune) |
-| `show ip mroute count` | Liczniki multicast |
-| `show ip igmp groups` | Grupy IGMP zarejestrowane w ruterze |
-| `show ip igmp membership` | Członkostwo w grupach IGMP |
-| `show ip pim rp` | Informacje o Rendezvous Point |
-| `show ip pim rp mapping` | Mapowanie grup do RP |
-| `show ip pim neighbor` | Sąsiedzi PIM |
-| `show ip pim interface count` | Liczniki PIM na interfejsach |
-| `clear ip mroute *` | Czyszczenie tablicy multicast |
-| `clear ip igmp group` | Czyszczenie grup IGMP |
-
----
-
-## Różnice: Dense Mode vs Sparse Mode
+## Podsumowanie – różnice między trybami PIM
 
 | Cecha | Dense Mode | Sparse Mode |
-|---|---|---|
-| Tryb działania | Push (rozgłoszenie do wszystkich) | Pull (na żądanie) |
+|-------|------------|-------------|
+| Zasada | Push – rozgłasza wszędzie, tnie niepotrzebne | Pull – dostarcza tylko tam, gdzie potrzeba |
 | Rendezvous Point | Nie wymagany | Wymagany |
-| Domyślne zachowanie | Ruch wysyłany wszędzie | Ruch wysyłany tylko tam gdzie potrzeba |
-| Wydajność | Niska (dużo zbędnego ruchu) | Wysoka |
+| Ruch w sieci | Większy (initial flood) | Mniejszy |
 | Złożoność konfiguracji | Prosta | Wymaga wskazania RP |
-| Komunikaty prune | Tak (wstrzymanie niepotrzebnego ruchu) | Nie są potrzebne |
-| Zastosowanie | Małe sieci, gęste grupy odbiorców | Duże sieci, rzadko rozmieszczeni odbiorcy |
+| Optymalne zastosowanie | Gęsta sieć, wielu odbiorców | Rozproszona sieć, niewielu odbiorców |
+
+---
+
+## Typowe problemy i rozwiązania
+
+| Problem | Możliwa przyczyna | Rozwiązanie |
+|---------|-------------------|-------------|
+| Odbiorca nie widzi strumienia | TTL=1 w VLC | Dodaj `ttl=10` do komendy VLC |
+| Ruch multicast idzie na wszystkie porty switcha | IGMP Snooping wyłączony | `ip igmp snooping` na switchu |
+| Rutery nie widzą się w PIM | Brak rutowania unicast | Skonfiguruj EIGRP/RIP/static |
+| Sparse mode nie działa | Brak konfiguracji RP | `ip pim rp-address` na każdym ruterze |
+| Tablica mroute pusta | PIM nie włączony na interfejsie | `ip pim dense/sparse-mode` na każdym int |
