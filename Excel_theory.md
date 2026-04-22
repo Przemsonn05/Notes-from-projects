@@ -948,13 +948,6 @@ $$\sigma = \sqrt{\frac{\sum (x_i - \mu)^2}{N}}$$
 **Współczynnik korelacji Pearsona:**
 $$r = \frac{\sum (x_i - \bar{x})(y_i - \bar{y})}{\sqrt{\sum (x_i - \bar{x})^2 \cdot \sum (y_i - \bar{y})^2}}$$
 
-### Trzy zasady, o których nie zapominaj
 
-> 🥇 **Dane > formatowanie.** Najpierw popraw strukturę danych (tabele, nazwy, typy), potem myśl o wyglądzie.
->
-> 🥈 **Unikaj hardcode'u.** Zamiast wpisywać `1000` w formule, odwołaj się do komórki z parametrem — łatwiej modyfikować.
->
-> 🥉 **Dokumentuj.** Twój plik musi być zrozumiały bez Ciebie — arkusz „Readme", komentarze, spójne kolory.
 
 ---
-
