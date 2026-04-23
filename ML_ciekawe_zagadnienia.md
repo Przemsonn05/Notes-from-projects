@@ -757,10 +757,183 @@ Wyobraź sobie, że badasz 1000 osób pod kątem rzadkiej choroby. Wiemy, że 10
 
 ## Z lab6
 
-### Czym są enseble methods w ML
+### Logistic Regression
 
-### Hard Voting i Soft Voting
+Mimo nazwy „regresja”, jest to algorytm służący do klasyfikacji. Zamiast budować drzewo pytań, stara się on wyznaczyć linię (lub płaszczyznę), która najlepiej oddziela od siebie dwie klasy.
+
+Jak to działa?
+
+- Model liniowy: Algorytm mnoży każdą cechę przez odpowiednią wagę i sumuje je.
+
+- Funkcja Sigmoidalna: Wynik tej sumy jest przepuszczany przez funkcję logistyczną (sigmoid), która „ściska” dowolną liczbę do przedziału od 0 do 1. $$\sigma(z) = \frac{1}{1 + e^{-z}}$$ 
+
+- Prawdopodobieństwo: Wynik interpretujemy jako prawdopodobieństwo przynależności do klasy (np. jeśli wynik to 0.85, to mamy 85% szans, że to klasa „1”).
+
+Zalety:
+
+- Bardzo szybka i efektywna obliczeniowo.
+
+- Zwraca prawdopodobieństwo, co jest użyteczne w biznesie (np. ocena ryzyka kredytowego).
+
+- Mniej podatna na przeuczenie niż drzewa (zwłaszcza przy użyciu regularyzacji L1/L2).
+
+Wady:
+
+- Zakłada liniową zależność między cechami a wynikiem (słabo radzi sobie ze złożonymi, nieliniowymi wzorcami bez inżynierii cech).
+
+### VotingClassifier, Hard/Soft Voting
+
+Voting Classifier (klasyfikator głosujący) to jedna z najprostszych, a zarazem najskuteczniejszych metod Ensemble Learningu (uczenia zespołowego). Idea jest prosta: zamiast ufać jednemu algorytmowi, trenujemy kilka różnych modeli i pozwalamy im głosować nad ostatecznym wynikiem.
+
+1. Hard Voting (Głosowanie twarde)
+
+To system większościowy. Każdy model w zespole przewiduje konkretną klasę (np. „To jest pies” lub „To jest kot”). Klasyfikator głosujący sumuje te głosy i wybiera tę etykietę, która pojawiała się najczęściej.
+
+Przykład: Mamy 3 modele klasyfikujące zdjęcie:
+
+- Model A: Pies
+
+- Model B: Pies
+
+- Model C: Kot
+
+- Wynik końcowy: Pies (bo wygrał 2:1).
+
+Kiedy stosować?
+
+Gdy Twoje modele nie potrafią dobrze oszacować prawdopodobieństwa (czyli jak bardzo są pewne swojego wyboru) lub gdy po prostu chcesz prostego, stabilnego rozwiązania.
+
+2. Soft Voting (Głosowanie miękkie)
+
+To podejście bardziej subtelne i zazwyczaj skuteczniejsze. Zamiast patrzeć na ostateczny werdykt („Pies”/„Kot”), patrzymy na to, jak bardzo każdy model jest pewny swojej decyzji (czyli analizujemy prawdopodobieństwo).
+
+Algorytm wyciąga średnią z prawdopodobieństw dla każdej klasy i wybiera tę, która ma najwyższą średnią.
+
+Przykład:
+
+- Model A: Jestem na 90% pewny, że to Pies.
+
+- Model B: Jestem na 45% pewny, że to Pies (czyli 55%, że Kot).
+
+- Model C: Jestem na 90% pewny, że to Pies.
+
+- Wynik: Średnia dla Psa to $(0.9 + 0.45 + 0.9) / 3 = 0.75$. 
+
+- Wynik końcowy: Pies.
+
+Dlaczego to jest lepsze?
+
+Bo daje większą wagę modelom, które są „bardzo pewne” swojego zdania. Jeśli dwa modele ledwo co skłaniają się ku opcji A, a jeden jest absolutnie przekonany o opcji B, w Soft Voting opcja B może wygrać, mimo że w Hard Voting przegrałaby 1:2.
 
 ### Bagging i Pasting
+
+1. Bagging (Bootstrap Aggregating)
+
+Bagging to skrót od Bootstrap Aggregating. Polega na losowaniu podzbiorów danych ze zwracaniem (sampling with replacement).
+
+Jak to działa: Jeśli masz 100 przykładów w zbiorze treningowym, losujesz z niego 100 razy, ale po każdym wylosowaniu przykład „wraca do puli”.
+
+- Efekt: W jednym podzbiorze niektóre przykłady mogą pojawić się kilka razy, a inne mogą nie pojawić się wcale.
+
+- Zaleta: Bardzo dobrze redukuje wariancję modelu (zapobiega overfittingowi). Modele są od siebie bardziej niezależne.
+
+2. Pasting
+
+Pasting jest bardzo podobny do baggingu, ale losowanie odbywa się bez zwracania (sampling without replacement).
+
+- Jak to działa: Losujesz podzbiór przykładów (np. 50 ze 100), ale raz wyciągnięty przykład nie może być wybrany ponownie do tego samego podzbioru.
+
+- Efekt: Każdy przykład w konkretnym podzbiorze jest unikalny.
+
+- Zaleta: Często stosowany, gdy mamy bardzo duży zbiór danych i nie chcemy, aby modele widziały te same dane wielokrotnie w ramach jednej próbki.
+
+3. Half-Bagging i Half-Pasting
+
+Terminy te nie są standardowymi nazwami algorytmów w literaturze naukowej, ale odnoszą się do konfiguracji parametrów w bibliotekach takich jak Scikit-Learn (parametr max_samples).
+
+W klasycznym Baggingu/Pastingu zazwyczaj losuje się podzbiór o takim samym rozmiarze jak oryginalny zbiór treningowy ($n$). Wersje "Half" oznaczają, że ograniczamy rozmiar podzbioru do 50% (połowy) oryginalnych danych.
+
+- Half-Bagging
+
+    - Losujemy podzbiór o rozmiarze równym 0.5 oryginalnego zbioru, stosując zwracanie.Zwiększa to różnorodność między modelami, ponieważ każdy z nich widzi tylko połowę dostępnych informacji.
+
+- Half-Pasting
+
+    - Losujemy podzbiór o rozmiarze równym 0.5 oryginalnego zbioru, bez zwracania. Każdy model trenuje się na unikalnej „połówce” danych.
+
+### BaggingClassifier, AdaBoostClassifier and GradientBoostingClassifier
+
+1. BaggingClassifier (Równoległość)
+
+Bagging (Bootstrap Aggregating) to podejście „demokratyczne”. Trenujemy wiele modeli jednocześnie i niezależnie od siebie, a ostateczny wynik jest średnią (lub wynikiem głosowania) ich wszystkich.
+
+Jak to działa: Każdy model w zespole trenuje się na nieco innym podzbiorze danych (losowanie ze zwracaniem – tzw. bootstrapping).
+
+Główny cel: Redukcja wariancji (overfittingu). Dzięki temu, że modele widzą różne dane, błędy pojedynczych drzew znoszą się w tłumie.
+
+Przykład: Las Losowy (Random Forest) to w uproszczeniu BaggingClassifier używający wyłącznie drzew decyzyjnych.
+
+2. AdaBoostClassifier (Sekwencyjność + Wagi)
+
+AdaBoost (Adaptive Boosting) to podejście „uczenia się na błędach”. Modele są trenowane jeden po drugim (sekwencyjnie).
+
+Jak to działa: 
+
+- 1. Trenujemy pierwszy model.
+
+- 2. Sprawdzamy, które przykłady danych źle zaklasyfikował.
+
+- 3. Zwiększamy wagę tych trudnych przykładów, aby kolejny model skupił się głównie na nich.
+
+- 4. Powtarzamy proces, a każdy kolejny model staje się „ekspertem” od błędów poprzednika.
+
+Główny cel: Redukcja obciążenia (bias) i błędu.
+
+3. GradientBoostingClassifier (Sekwencyjność + Reszty)
+
+Gradient Boosting to „starszy i potężniejszy brat” AdaBoost. Również działa sekwencyjnie, ale zamiast zmieniać wagi danych, używa rachunku różniczkowego.
+
+Jak to działa:
+
+- 1. Trenujemy model $M1$.
+
+- 2. Obliczamy błąd (resztę) – czyli różnicę między tym, co model przewidział, a rzeczywistością.
+
+- 3. Trenujemy model $M2$, ale nie po to, by przewidział wynik końcowy, tylko by przewidział błąd modelu M1.
+
+- 4. Dodajemy te przewidywania błędu do wyniku $M1$, aby go skorygować.
+
+Główny cel: Maksymalizacja skuteczności. To jeden z najpotężniejszych algorytmów dla danych tabelarycznych (na jego bazie powstały słynne biblioteki jak XGBoost czy LightGBM).
+
+### Dlaczego Random Forest daje inne rezultaty niż Bagging + drzewa decyzyjne?
+
+Mimo że oba podejścia opierają się na technice Baggingu (losowaniu wierszy ze zwracaniem), istnieje jedna fundamentalna różnica, która sprawia, że Random Forest jest zazwyczaj potężniejszy: sposób losowania cech.
+
+Zwykły Bagging + Drzewa: Każde drzewo w zespole ma dostęp do wszystkich cech (chyba że ręcznie ustawimy max_features w BaggingClassifier). Jeśli w danych istnieje jedna, bardzo silna cecha (np. "zarobki" przy przewidywaniu zdolności kredytowej), to każde drzewo w zespole prawdopodobnie użyje jej na samym początku. Wynik? Otrzymujemy zestaw 100 drzew, które są do siebie bardzo podobne (skorelowane).
+
+Random Forest: Wprowadza dodatkowy poziom losowości. Cechy są losowane przy każdym podziale węzła (split).
+
+Nawet jeśli cecha "zarobki" jest najsilniejsza, algorytm w wielu węzłach celowo jej "nie widzi", zmuszając drzewo do szukania wzorców w słabszych cechach.
+
+Efekt: Drzewa w Lesie Losowym są od siebie odkorelowane. Dzięki temu, gdy wyciągamy z nich średnią, błąd wariancji spada znacznie mocniej niż w zwykłym Baggingu.
+
+### Problemy z samplingiem cech przy identyfikacji ważności
+
+Stwierdzenie z punktu 4. odnosi się do faktu, że losowe wybieranie podzbioru cech (tak jak robiłeś to w kodzie z max_features=2) może "oślepić" model na rzeczywiste relacje w danych. Oto dlaczego nie jest to idealne narzędzie diagnostyczne:
+
+A. Problem Interakcji (Zależności)
+Niektóre cechy działają jak "drużyna". Pojedynczo mogą nie znaczyć nic, ale razem dają ogromną informację.
+
+Przykład: Wyobraź sobie, że przewidujesz, czy ktoś kupi lody. Masz cechy: "Temperatura" i "Czy jest lato". Jeśli Twój sampling cech wylosuje tylko "Czy jest lato", model może nie zauważyć, że ludzie nie kupują lodów w chłodne, letnie dni.
+
+Jeśli algorytm losuje tylko małe podzbiory, może nigdy nie trafić na kombinację cech, która jest kluczowa.
+
+B. Multikoliniowość (Cechy nadmiarowe)
+Jeśli dwie cechy są ze sobą silnie skorelowane (np. "Wiek" i "Rok urodzenia"), niosą tę samą informację.
+
+Przy samplingu cech, raz model użyje jednej, raz drugiej. W analizie ważności cech wynik zostanie "rozmyty" między obie kolumny, przez co żadna z nich nie będzie wyglądać na dominującą, mimo że informacja o czasie jest kluczowa.
+
+C. Fałszywe wnioski
+Gdy oceniasz ważność cech na podstawie samplingu (tak jak w Twoim pętli for), widzisz tylko, jak dana cecha radzi sobie w losowym, ograniczonym środowisku. To nie mówi Ci, jak ważna byłaby ta cecha, gdyby model miał do dyspozycji pełen kontekst danych.
 
 ---
