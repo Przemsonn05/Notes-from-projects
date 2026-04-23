@@ -905,6 +905,10 @@ Jak to działa:
 
 Główny cel: Maksymalizacja skuteczności. To jeden z najpotężniejszych algorytmów dla danych tabelarycznych (na jego bazie powstały słynne biblioteki jak XGBoost czy LightGBM).
 
+AdaBoost (Adaptive Boosting): Skupia się na wagach punktów danych. Jeśli dany przykład został źle sklasyfikowany przez poprzedni model, w następnej iteracji otrzymuje on większą wagę. Dzięki temu kolejny „słaby uczeń” (weak learner) kładzie większy nacisk na te trudne przypadki.
+
+Gradient Boosting: Skupia się na funkcji straty (loss function). Zamiast zmieniać wagi punktów, Gradient Boosting próbuje przewidzieć reszty (residuals), czyli różnicę między wartością rzeczywistą a przewidzianą przez poprzednie modele. Wykorzystuje do tego algorytm spadku gradientu (gradient descent), aby zminimalizować błąd.
+
 ### Dlaczego Random Forest daje inne rezultaty niż Bagging + drzewa decyzyjne?
 
 Mimo że oba podejścia opierają się na technice Baggingu (losowaniu wierszy ze zwracaniem), istnieje jedna fundamentalna różnica, która sprawia, że Random Forest jest zazwyczaj potężniejszy: sposób losowania cech.
