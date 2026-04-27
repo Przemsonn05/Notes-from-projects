@@ -3605,3 +3605,537 @@ Lista sąsiadów PIM (ruterów, z którymi nawiązano relację PIM).
 | Rutery nie widzą się w PIM | Brak rutowania unicast | Skonfiguruj EIGRP/RIP/static |
 | Sparse mode nie działa | Brak konfiguracji RP | `ip pim rp-address` na każdym ruterze |
 | Tablica mroute pusta | PIM nie włączony na interfejsie | `ip pim dense/sparse-mode` na każdym int |
+
+# SIECI KOMPUTEROWE – LAB 076
+## Cisco IPv6 – Pełny Przewodnik Komend (PuTTY)
+
+> **Układ fizyczny:** PC — R1 — R2 — PC (połączenie Serial lub FastEthernet między ruterami)
+
+---
+
+## ZADANIE A – Konfigurowanie interfejsów IPv6
+
+### A.1 – Sprawdzenie obsługi IPv6 w ruterze
+
+```
+Router> enable
+Router# show ipv6 ?
+```
+
+Jeśli pojawi się lista opcji – ruter obsługuje IPv6. ✅
+
+---
+
+### A.2 – Tworzenie interfejsu Loopback i przypisanie adresu EUI-64
+
+#### Na Ruterze 1:
+
+```
+Router> enable
+Router# configure terminal
+Router(config)# interface loopback 1
+Router(config-if)# ipv6 address 1:2:1::/64 eui-64
+Router(config-if)# no shutdown
+Router(config-if)# end
+```
+
+#### Weryfikacja adresu EUI-64:
+
+```
+Router# show ipv6 int brief
+Router# show ipv6 interface loopback 1
+```
+
+> 💡 Adres EUI-64 jest generowany automatycznie na podstawie adresu MAC interfejsu. Młodsze 64 bity mają postać: `MMMM:MMFF:FEMM:MMMM`, gdzie `MM` = bajty MAC, `FFFE` = stałe uzupełnienie.
+
+---
+
+### A.3 – Przypisanie adresu IPv6 do interfejsu fizycznego
+
+#### Forma pełna:
+
+```
+Router(config)# interface fastethernet 0/0
+Router(config-if)# ipv6 address 1111:1:0:0:0:0:1:1111/64
+Router(config-if)# no shutdown
+Router(config-if)# exit
+```
+
+#### Forma skrócona (:: zastępuje ciąg zer):
+
+```
+Router(config)# interface fastethernet 0/0
+Router(config-if)# ipv6 address 1111:1::1:1111/64
+Router(config-if)# no shutdown
+Router(config-if)# exit
+```
+
+#### Forma EUI-64:
+
+```
+Router(config)# interface fastethernet 0/0
+Router(config-if)# ipv6 address 1111:1111:1111:1111::/64 eui-64
+Router(config-if)# no shutdown
+Router(config-if)# exit
+```
+
+---
+
+### A.4 – Adresy specjalne IPv6
+
+| Adres IPv6 | Odpowiednik IPv4 |
+|---|---|
+| `0:0:0:0:0:0:0:0` | `0.0.0.0` |
+| `0:0:0:0:0:0:0:1` | `127.0.0.1` |
+
+---
+
+### A.5 – Diagnostyka IPv6
+
+```
+Router# debug ipv6 icmp
+Router# ping ipv6 2:1::1
+Router# ping ipv6 2:1::1 source 1:1::1
+Router# traceroute ipv6 2:1::1
+Router# show ipv6 route
+```
+
+---
+
+### A.6 – Statyczne reguły rutowania IPv6
+
+```
+Router(config)# ipv6 route 3:1::/64 2:1::1
+```
+
+> Analogiczne do `ip route` w IPv4. Wykonaj to na obu ruterach tak, aby loopbacki po obu stronach mogły się komunikować.
+
+---
+
+## ZADANIE B – Rutowanie RIPng (IPv6)
+
+### B.1 – Włączenie rutowania IPv6
+
+```
+Router(config)# ipv6 unicast-routing
+```
+
+---
+
+### B.2 – Uruchomienie procesu RIPng
+
+```
+Router(config)# ipv6 router rip ripper
+Router(config-rtr)# exit
+```
+
+> `ripper` to dowolna nazwa procesu RIPng – musi być taka sama na obu ruterach.
+
+---
+
+### B.3 – Aktywacja RIPng na interfejsach
+
+> ⚠️ W IPv6 RIP przypisuje się do **interfejsów**, nie do sieci!
+
+```
+Router(config)# interface fastethernet 0/0
+Router(config-if)# ipv6 rip ripper enable
+Router(config-if)# no shutdown
+Router(config-if)# exit
+
+Router(config)# interface fastethernet 0/1
+Router(config-if)# ipv6 rip ripper enable
+Router(config-if)# no shutdown
+Router(config-if)# exit
+```
+
+---
+
+### B.4 – Weryfikacja RIPng
+
+```
+Router# show ipv6 interface fastethernet 0/0
+Router# show ipv6 route
+Router# show ipv6 rip
+```
+
+#### Kasowanie tablicy rutowania:
+
+```
+Router# clear ipv6 route *
+```
+
+---
+
+## ZADANIE C – Rutowanie OSPFv3 i EIGRP (IPv6)
+
+### C.1 – Wyłączenie RIPng (jeśli był uruchomiony)
+
+```
+Router(config)# no ipv6 router rip ripper
+```
+
+---
+
+### C.2 – Uruchomienie OSPFv3
+
+```
+Router(config)# ipv6 router ospf 10
+Router(config-rtr)# router-id 1.1.1.1
+Router(config-rtr)# exit
+```
+
+> ⚠️ `router-id` **musi być unikalne** dla każdego rutera i ustawione ręcznie (nie generuje się z IPv4)!
+> Na drugim ruterze użyj np. `router-id 2.2.2.2`
+
+---
+
+### C.3 – Przypisanie interfejsów do OSPFv3
+
+```
+Router(config)# interface fastethernet 0/0
+Router(config-if)# ipv6 ospf 10 area 0.0.0.0
+Router(config-if)# no shutdown
+Router(config-if)# exit
+
+Router(config)# interface fastethernet 0/1
+Router(config-if)# ipv6 ospf 10 area 0.0.0.0
+Router(config-if)# no shutdown
+Router(config-if)# exit
+```
+
+---
+
+### C.4 – Weryfikacja OSPFv3
+
+```
+Router# debug ipv6 ospf
+Router# debug ipv6 ospf packet
+Router# debug ipv6 ospf hello
+Router# show ipv6 protocols
+Router# show ipv6 route
+Router# show ipv6 ospf neighbor
+Router# show ipv6 ospf interface
+Router# show ipv6 ospf database
+```
+
+---
+
+### C.5 – Tworzenie rutera ABR (drugi ruter – nowe area)
+
+```
+Router2(config)# interface loopback 2
+Router2(config-if)# ipv6 address 2:1::1/64
+Router2(config-if)# no shutdown
+Router2(config-if)# ipv6 ospf 10 area 1
+Router2(config-if)# exit
+```
+
+#### Sprawdzenie ruterów ABR z pierwszego rutera:
+
+```
+Router# show ipv6 ospf border-routers
+```
+
+---
+
+### C.6 – Wyłączenie OSPFv3 i uruchomienie EIGRP dla IPv6
+
+> ⚠️ EIGRP dla IPv6 dostępne tylko na: Cisco 3640, 3660, 3725, 3745, 3845, 7100, 7200VXR, 7300, 7400, 6500
+
+```
+Router(config)# no ipv6 router ospf 10
+Router(config)# ipv6 router eigrp 1234
+Router(config-rtr)# eigrp router-id 10
+Router(config-rtr)# exit
+```
+
+> `1234` = numer systemu autonomicznego AS (musi być ten sam na wszystkich ruterach EIGRP)
+
+---
+
+### C.7 – Przypisanie interfejsów do EIGRP
+
+```
+Router(config)# interface fastethernet 0/0
+Router(config-if)# ipv6 eigrp 1234
+Router(config-if)# no shutdown
+Router(config-if)# exit
+```
+
+---
+
+## ZADANIE D – Tunelowanie IPv6 w IPv4
+
+### Topologia sieci
+
+```
+[R1]---IPv6---[R2]===Tunel IPv6/IPv4===[R4]---IPv6---[R5]
+                        |          |
+                       [R3] (tylko IPv4, OSPF)
+```
+
+#### Adresy używane w zadaniu:
+
+| Ruter | Interfejs | Adres |
+|---|---|---|
+| R1 | Fa0/0 | `2::2/64` |
+| R2 | Fa0/0 (IPv4) | `200.200.200.2/24` |
+| R2 | Fa0/1 (IPv6) | `2::1/64` |
+| R2 | Tunnel0 | `3::1/64` |
+| R3 | Fa0/0 | `200.200.200.1/24` |
+| R3 | Fa0/1 | `200.200.201.1/24` |
+| R4 | Fa0/0 (IPv4) | `200.200.201.2/24` |
+| R4 | Fa0/1 (IPv6) | `1::1/64` |
+| R4 | Tunnel0 | `3::2/64` |
+| R5 | Fa0/0 | `1::2/64` |
+
+---
+
+### D.1 – Konfiguracja Rutera R1 (tylko IPv6)
+
+```
+Router1> enable
+Router1# configure terminal
+Router1(config)# ipv6 unicast-routing
+Router1(config)# ipv6 router rip ripper
+Router1(config-rtr)# exit
+Router1(config)# interface fastethernet 0/0
+Router1(config-if)# no ip address
+Router1(config-if)# ipv6 address 2::2/64
+Router1(config-if)# ipv6 rip ripper enable
+Router1(config-if)# no shutdown
+Router1(config-if)# exit
+Router1(config)# end
+```
+
+---
+
+### D.2 – Konfiguracja Rutera R5 (tylko IPv6)
+
+```
+Router5> enable
+Router5# configure terminal
+Router5(config)# ipv6 unicast-routing
+Router5(config)# ipv6 router rip ripper
+Router5(config-rtr)# exit
+Router5(config)# interface fastethernet 0/0
+Router5(config-if)# no ip address
+Router5(config-if)# ipv6 address 1::2/64
+Router5(config-if)# ipv6 rip ripper enable
+Router5(config-if)# no shutdown
+Router5(config-if)# exit
+Router5(config)# end
+```
+
+---
+
+### D.3 – Konfiguracja Rutera R2 (bramka IPv6 + tunel)
+
+```
+Router2> enable
+Router2# configure terminal
+Router2(config)# ipv6 unicast-routing
+Router2(config)# ipv6 router rip ripper
+Router2(config-rtr)# exit
+
+Router2(config)# interface fastethernet 0/0
+Router2(config-if)# ip address 200.200.200.2 255.255.255.0
+Router2(config-if)# no shutdown
+Router2(config-if)# exit
+
+Router2(config)# interface fastethernet 0/1
+Router2(config-if)# no ip address
+Router2(config-if)# ipv6 address 2::1/64
+Router2(config-if)# ipv6 rip ripper enable
+Router2(config-if)# no shutdown
+Router2(config-if)# exit
+
+Router2(config)# router ospf 1
+Router2(config-router)# log-adjacency-changes
+Router2(config-router)# network 200.200.200.0 0.0.0.255 area 0
+Router2(config-router)# router-id 200.200.200.2
+Router2(config-router)# exit
+
+Router2(config)# interface tunnel 0
+Router2(config-if)# no ip address
+Router2(config-if)# ipv6 address 3::1/64
+Router2(config-if)# ipv6 rip ripper enable
+Router2(config-if)# tunnel source fastethernet 0/0
+Router2(config-if)# tunnel destination 200.200.201.2
+Router2(config-if)# tunnel mode ipv6ip
+Router2(config-if)# no shutdown
+Router2(config-if)# exit
+Router2(config)# end
+```
+
+---
+
+### D.4 – Konfiguracja Rutera R4 (bramka IPv6 + tunel)
+
+```
+Router4> enable
+Router4# configure terminal
+Router4(config)# ipv6 unicast-routing
+Router4(config)# ipv6 router rip ripper
+Router4(config-rtr)# exit
+
+Router4(config)# interface fastethernet 0/0
+Router4(config-if)# ip address 200.200.201.2 255.255.255.0
+Router4(config-if)# no shutdown
+Router4(config-if)# exit
+
+Router4(config)# interface fastethernet 0/1
+Router4(config-if)# no ip address
+Router4(config-if)# ipv6 address 1::1/64
+Router4(config-if)# ipv6 rip ripper enable
+Router4(config-if)# no shutdown
+Router4(config-if)# exit
+
+Router4(config)# router ospf 1
+Router4(config-router)# log-adjacency-changes
+Router4(config-router)# network 200.200.201.0 0.0.0.255 area 0
+Router4(config-router)# router-id 200.200.201.2
+Router4(config-router)# exit
+
+Router4(config)# interface tunnel 0
+Router4(config-if)# no ip address
+Router4(config-if)# ipv6 address 3::2/64
+Router4(config-if)# ipv6 rip ripper enable
+Router4(config-if)# tunnel source fastethernet 0/0
+Router4(config-if)# tunnel destination 200.200.200.2
+Router4(config-if)# tunnel mode ipv6ip
+Router4(config-if)# no shutdown
+Router4(config-if)# exit
+Router4(config)# end
+```
+
+---
+
+### D.5 – Konfiguracja Rutera R3 (tylko IPv4 + OSPF)
+
+```
+Router3> enable
+Router3# configure terminal
+Router3(config)# ip subnet-zero
+Router3(config)# ip classless
+
+Router3(config)# interface fastethernet 0/0
+Router3(config-if)# ip address 200.200.200.1 255.255.255.0
+Router3(config-if)# no shutdown
+Router3(config-if)# exit
+
+Router3(config)# interface fastethernet 0/1
+Router3(config-if)# ip address 200.200.201.1 255.255.255.0
+Router3(config-if)# no shutdown
+Router3(config-if)# exit
+
+Router3(config)# router ospf 1
+Router3(config-router)# log-adjacency-changes
+Router3(config-router)# network 200.200.200.0 0.0.0.255 area 0
+Router3(config-router)# network 200.200.201.0 0.0.0.255 area 0
+Router3(config-router)# router-id 200.200.201.1
+Router3(config-router)# exit
+Router3(config)# end
+```
+
+---
+
+### D.6 – Weryfikacja stanu interfejsów IPv6
+
+```
+Router# show ipv6 int brief
+```
+
+---
+
+### D.7 – Weryfikacja OSPF (rutery IPv4: R2, R3, R4)
+
+```
+Router# show ip ospf neighbor
+```
+
+---
+
+### D.8 – Weryfikacja tablic rutowania
+
+#### Na R2:
+
+```
+Router2# show ip route
+Router2# show ipv6 route
+```
+
+#### Na R4:
+
+```
+Router4# show ip route
+Router4# show ipv6 route
+```
+
+#### Na R1 i R5:
+
+```
+Router1# show ipv6 route
+Router5# show ipv6 route
+```
+
+> 💡 RIPv6 powinien uzupełnić tablice o trasy do sieci po drugiej stronie tunelu.
+
+---
+
+### D.9 – Testy komunikacji (ping i traceroute z R1)
+
+```
+Router1# ping ipv6 1::1
+Router1# ping ipv6 2::1
+Router1# ping ipv6 3::1
+Router1# ping ipv6 3::2
+Router1# ping ipv6 1::2
+Router1# traceroute ipv6 1::2
+```
+
+#### Oczekiwany wynik traceroute:
+
+```
+Tracing the route to 1::2
+
+  1  2::1   44 msec  28 msec  16 msec
+  2  3::2   72 msec  72 msec  64 msec
+  3  1::2  104 msec  76 msec  80 msec
+```
+
+---
+
+### D.10 – Test z komputera PC (jeśli PC obsługuje IPv6)
+
+```cmd
+ping -6 1::1
+tracert -6 -d 1::1
+```
+
+---
+
+## PODSUMOWANIE – Najważniejsze komendy weryfikacyjne
+
+| Komenda | Opis |
+|---|---|
+| `show ipv6 int brief` | Lista interfejsów z adresami IPv6 |
+| `show ipv6 route` | Tablica rutowania IPv6 |
+| `show ipv6 rip` | Status i trasy RIPng |
+| `show ipv6 ospf neighbor` | Sąsiedzi OSPFv3 |
+| `show ipv6 ospf database` | Baza danych OSPFv3 |
+| `show ipv6 ospf interface` | Interfejsy OSPFv3 |
+| `show ipv6 ospf border-routers` | Rutery ABR w OSPFv3 |
+| `show ip ospf neighbor` | Sąsiedzi OSPF (IPv4) |
+| `show ip route` | Tablica rutowania IPv4 |
+| `show ipv6 protocols` | Aktywne protokoły rutowania IPv6 |
+| `debug ipv6 icmp` | Debug ICMPv6 |
+| `debug ipv6 ospf` | Debug OSPFv3 |
+| `clear ipv6 route *` | Kasowanie tablicy rutowania IPv6 |
+| `ping ipv6 X::X` | Ping IPv6 |
+| `traceroute ipv6 X::X` | Traceroute IPv6 |
+
+---
+
+> © Michał Turek – opracowanie komend na podstawie instrukcji LAB 076
