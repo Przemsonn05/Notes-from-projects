@@ -4312,3 +4312,561 @@ tracert -6 -d BABE:1::9
 | `debug ipv6 ospf hello` | Debug hello OSPFv3 | R-ALFA, R-BETA |
 | `clear ipv6 route *` | Kasowanie tablicy IPv6 | każdy ruter |
 | `no debug all` | Wyłącz wszystkie debug | po zakończeniu! |
+
+# Sieci Komputerowe – Lab BGP (eBGP, Atrybuty, Policy Routing, Redystrybucja)
+
+> **Uwaga ogólna:** Używamy 3 ruterów Cisco. Komputer A obsługuje R1 i R2, Komputer B obsługuje R3. Połączenia konsolowe przez PuTTY (COM port, baud 9600).
+
+---
+
+## Schemat adresacji (ZMIENIONE adresy względem oryginału)
+
+```
+AS 65010 (R1)           AS 65020 (R2)          AS 65030 (R3)
+  Loopback: 10.1.1.1      Loopback: 10.2.2.1     Loopback: 10.3.3.1
+       |                       |                       |
+  fa0/0: 172.16.10.2 --- fa0/0: 172.16.10.1    fa0/1: 172.16.20.2
+                          fa0/1: 172.16.20.1 ---
+                                                fa0/1: 172.16.30.2 (Zadanie D+)
+  fa0/1: 172.16.30.1 ----------------------------^ (bezpośrednie, Zadanie D+)
+```
+
+| Łącze / Sieć       | R1 (fa)         | R2 (fa)         | R3 (fa)         |
+|--------------------|-----------------|-----------------|-----------------|
+| R1–R2              | fa0/0: 172.16.10.2 | fa0/0: 172.16.10.1 | —            |
+| R2–R3              | —               | fa0/1: 172.16.20.1 | fa0/0: 172.16.20.2 |
+| R1–R3 (Zad. D)     | fa0/1: 172.16.30.1 | —              | fa0/1: 172.16.30.2 |
+| Loopback 1         | 10.1.1.1/24     | 10.2.2.1/24     | 10.3.3.1/24     |
+
+---
+
+## Zadanie A – Przygotowanie fizyczne i adresacja
+
+### Podłączenie kabli
+
+```
+R1 fa0/0 ←—— kabel prosty ——→ R2 fa0/0
+R2 fa0/1 ←—— kabel prosty ——→ R3 fa0/0
+```
+
+- R1 i R2 łączysz kablem prostym (interfejsy Ethernet).
+- R2 i R3 łączysz kablem prostym.
+- Komputer A: kabel konsolowy do R1, potem przepiąć do R2.
+- Komputer B: kabel konsolowy do R3.
+
+### Pojęcia AS
+
+- **Single-homed AS:** tylko jedno wyjście do innego AS → R1 (AS 65010) i R3 (AS 65030).
+- **Multi-homed AS:** więcej niż jedno wyjście → R2 (AS 65020).
+- Numery AS > 65000 – rezerwowe (do ćwiczeń).
+
+---
+
+## Zadanie B – Konfiguracja BGP i Systemów Autonomicznych
+
+### KOMPUTER A – Konfiguracja R1
+
+```
+R1> enable
+R1# configure terminal
+R1(config)# ip routing
+
+! Interfejsy
+R1(config)# interface FastEthernet0/0
+R1(config-if)# ip address 172.16.10.2 255.255.255.0
+R1(config-if)# no shutdown
+R1(config-if)# exit
+
+! Loopback (punkt B.5)
+R1(config)# interface Loopback1
+R1(config-if)# ip address 10.1.1.1 255.255.255.0
+R1(config-if)# no shutdown
+R1(config-if)# exit
+
+! BGP
+R1(config)# router bgp 65010
+R1(config-router)# neighbor 172.16.10.1 remote-as 65020
+R1(config-router)# network 172.16.10.0 mask 255.255.255.0
+R1(config-router)# network 10.1.1.0
+R1(config-router)# exit
+```
+
+Włącz debug żeby obserwować zdarzenia BGP:
+```
+R1# debug ip bgp
+```
+
+### KOMPUTER A – Konfiguracja R2
+
+```
+R2> enable
+R2# configure terminal
+R2(config)# ip routing
+
+R2(config)# interface FastEthernet0/0
+R2(config-if)# ip address 172.16.10.1 255.255.255.0
+R2(config-if)# no shutdown
+R2(config-if)# exit
+
+R2(config)# interface FastEthernet0/1
+R2(config-if)# ip address 172.16.20.1 255.255.255.0
+R2(config-if)# no shutdown
+R2(config-if)# exit
+
+R2(config)# interface Loopback1
+R2(config-if)# ip address 10.2.2.1 255.255.255.0
+R2(config-if)# no shutdown
+R2(config-if)# exit
+
+R2(config)# router bgp 65020
+R2(config-router)# neighbor 172.16.10.2 remote-as 65010
+R2(config-router)# neighbor 172.16.20.2 remote-as 65030
+R2(config-router)# network 172.16.10.0 mask 255.255.255.0
+R2(config-router)# network 172.16.20.0 mask 255.255.255.0
+R2(config-router)# network 10.2.2.0
+R2(config-router)# exit
+```
+
+> Jeśli nie tworzy się sesja BGP-peer, wpisz przed konfiguracją BGP:
+> `R2(config)# no parser cache`
+
+### KOMPUTER B – Konfiguracja R3
+
+```
+R3> enable
+R3# configure terminal
+R3(config)# ip routing
+
+R3(config)# interface FastEthernet0/0
+R3(config-if)# ip address 172.16.20.2 255.255.255.0
+R3(config-if)# no shutdown
+R3(config-if)# exit
+
+R3(config)# interface Loopback1
+R3(config-if)# ip address 10.3.3.1 255.255.255.0
+R3(config-if)# no shutdown
+R3(config-if)# exit
+
+R3(config)# router bgp 65030
+R3(config-router)# neighbor 172.16.20.1 remote-as 65020
+R3(config-router)# network 172.16.20.0 mask 255.255.255.0
+R3(config-router)# network 10.3.3.0
+R3(config-router)# exit
+```
+
+### Weryfikacja (wszystkie rutery)
+
+```
+! Sprawdź znanych sąsiadów BGP
+Router# show ip bgp summary
+
+! Sprawdź tablicę BGP
+Router# show ip bgp
+
+! Sprawdź konkretny prefiks (np. loopback R1 widoczny z R3)
+R3# show ip bgp 10.1.1.0/24
+```
+
+### Punkt B.6 – Wyrejestrowanie sieci
+
+Na R1 usuń sieć łączącą AS (np. sieć R1–R2):
+```
+R1(config)# router bgp 65010
+R1(config-router)# no network 172.16.10.0 mask 255.255.255.0
+```
+Sprawdź czy ping między loopbackami nadal działa (nie powinien po pewnym czasie).
+
+### Punkt B.7 – Reset sesji BGP
+
+```
+R1# clear ip bgp *
+```
+Obserwuj komunikaty debug i sprawdzaj jak odbudowuje się tablica BGP w R2 i R3.
+
+---
+
+## Zadanie C – Manipulowanie atrybutami tras BGP
+
+### KOMPUTER A – Konfiguracja R1 (route-maps + dodatkowy loopback)
+
+Dodaj nowy interfejs loopback:
+```
+R1(config)# interface Loopback2
+R1(config-if)# ip address 10.1.5.1 255.255.255.0
+R1(config-if)# no shutdown
+R1(config-if)# exit
+```
+
+Zdefiniuj route-mapy:
+```
+R1(config)# route-map mapa_in permit 10
+R1(config-route-map)# set local-preference 50
+R1(config-route-map)# set weight 100
+R1(config-route-map)# set metric 777
+R1(config-route-map)# set as-path prepend 300 400
+R1(config-route-map)# exit
+
+R1(config)# route-map mapa_out permit 10
+R1(config-route-map)# set as-path prepend 500 600
+R1(config-route-map)# exit
+
+R1(config)# route-map mapa_prefix permit 10
+R1(config-route-map)# set metric 99999
+R1(config-route-map)# set origin incomplete
+R1(config-route-map)# exit
+```
+
+Przypisz route-mapy do BGP:
+```
+R1(config)# router bgp 65010
+R1(config-router)# neighbor 172.16.10.1 route-map mapa_in in
+R1(config-router)# neighbor 172.16.10.1 route-map mapa_out out
+R1(config-router)# network 10.1.5.0 route-map mapa_prefix
+R1(config-router)# exit
+```
+
+Wyczyść sesje BGP i poczekaj na odbudowę:
+```
+R1# clear ip bgp *
+R2# clear ip bgp *
+```
+
+### Weryfikacja atrybutów
+
+```
+! Na R1 – sprawdź jak R1 widzi trasy od R2 (przez mapa_in)
+R1# show ip bgp
+
+! Na R2 – sprawdź czy widzi 10.1.5.0 z metryką z mapa_prefix
+R2# show ip bgp 10.1.5.0/24
+R2# show ip route
+
+! Szczegóły trasy do loopback R1 widziane przez R2
+R1# show ip bgp 10.2.2.0/24
+```
+
+**Co zaobserwujesz:**
+- `LOCAL-PREFERENCE` i `WEIGHT` nie są wysyłane poza AS (parametry lokalne).
+- `MED` (metric) pojawia się w tablicy rutowania jako metryka.
+- `AS-PATH prepend` widać w polu AS_PATH danej trasy.
+- `ORIGIN incomplete` widać jako `?` w polu Origin w tablicy BGP.
+
+### KOMPUTER A – Punkt C.2 – Filtrowanie AS-PATH w R2
+
+```
+R2(config)# ip as-path access-list 20 deny _500_
+R2(config)# ip as-path access-list 20 permit ^$
+
+R2(config)# router bgp 65020
+R2(config-router)# neighbor 172.16.10.2 filter-list 20 in
+R2(config-router)# exit
+
+R2# clear ip bgp *
+```
+
+Sprawdź czy R2 otrzymuje trasy z AS 500 w AS-PATH (nie powinien):
+```
+R2# show ip bgp
+```
+
+### Sprzątanie po Zadaniu C
+
+Po zakończeniu usuń route-mapy i filter-listy z BGP:
+```
+R1(config)# router bgp 65010
+R1(config-router)# no neighbor 172.16.10.1 route-map mapa_in in
+R1(config-router)# no neighbor 172.16.10.1 route-map mapa_out out
+R1(config-router)# no network 10.1.5.0 route-map mapa_prefix
+
+R2(config)# router bgp 65020
+R2(config-router)# no neighbor 172.16.10.2 filter-list 20 in
+```
+
+---
+
+## Zadanie D – BGP Alternatywne drogi
+
+### Fizyczne podłączenie (nowe)
+
+```
+R1 fa0/1 ←—— kabel prosty ——→ R3 fa0/1
+(przez przełącznik lub bezpośrednio)
+```
+
+Nowa sieć: `172.16.30.0/24`
+
+### KOMPUTER A – Konfiguracja R1 (nowy interfejs i sąsiad)
+
+```
+R1(config)# interface FastEthernet0/1
+R1(config-if)# ip address 172.16.30.1 255.255.255.0
+R1(config-if)# no shutdown
+R1(config-if)# exit
+
+R1(config)# router bgp 65010
+R1(config-router)# neighbor 172.16.30.2 remote-as 65030
+R1(config-router)# network 172.16.30.0 mask 255.255.255.0
+R1(config-router)# exit
+```
+
+### KOMPUTER B – Konfiguracja R3 (nowy interfejs i sąsiad)
+
+```
+R3(config)# interface FastEthernet0/1
+R3(config-if)# ip address 172.16.30.2 255.255.255.0
+R3(config-if)# no shutdown
+R3(config-if)# exit
+
+R3(config)# router bgp 65030
+R3(config-router)# neighbor 172.16.30.1 remote-as 65010
+R3(config-router)# network 172.16.30.0 mask 255.255.255.0
+R3(config-router)# exit
+```
+
+### Weryfikacja alternatywnych tras
+
+```
+! Na R1 – sprawdź przez który ruter idzie trasa do loopback R3 (10.3.3.1)
+R1# show ip route
+R1# show ip bgp
+
+! Traceroute – zobaczysz czy omija R2
+R1# traceroute 10.3.3.1
+```
+
+BGP domyślnie preferuje krótszą ścieżkę AS (bezpośrednio do R3: AS 65010→65030), zamiast przez R2 (65010→65020→65030).
+
+### Test przełączania tras przy awarii
+
+```
+! Na R1 wyślij dużo pingów do loopback R3
+R1# ping 10.3.3.1 source 10.1.1.1 repeat 10000
+```
+
+Podczas pingowania fizycznie odłącz kabel R1–R3 (symuluj awarię). Obserwuj po jakim czasie BGP przełączy ruch przez R2.
+
+---
+
+## Zadanie E – BGP Policy-Based Routing (blokowanie rozgłoszeń)
+
+### Cel
+
+Zmusić ruch z loopback R1 → loopback R3 (i odwrotnie), żeby szedł przez R2, mimo istnienia bezpośredniej trasy R1–R3.
+
+### KOMPUTER B – Blokowanie wysyłania rozgłoszeń z R3 do R1
+
+R3 przestanie informować R1 (sąsiada 172.16.30.1) o swojej sieci loopback (10.3.3.0/24):
+
+```
+R3(config)# access-list 25 deny 10.3.3.0 0.0.0.255
+R3(config)# access-list 25 permit 0.0.0.0 255.255.255.255
+
+R3(config)# route-map blokuj_wyslij_doR1 permit 10
+R3(config-route-map)# match ip address 25
+R3(config-route-map)# exit
+
+R3(config)# router bgp 65030
+R3(config-router)# neighbor 172.16.30.1 route-map blokuj_wyslij_doR1 out
+R3(config-router)# exit
+```
+
+### KOMPUTER A – Reset BGP na R1 i sprawdzenie efektu
+
+```
+R1# clear ip bgp *
+```
+
+Poczekaj na odbudowę sesji BGP, następnie:
+```
+R1# show ip route
+```
+
+**Spodziewany wynik:** trasa do 10.3.3.0 teraz wskazuje przez 172.16.10.1 (R2), nie przez 172.16.30.2 (bezpośrednio do R3).
+
+### KOMPUTER B – Blokowanie odbierania rozgłoszeń o R1 przez R3
+
+```
+R3(config)# access-list 26 deny 10.1.1.0 0.0.0.255
+R3(config)# access-list 26 permit 0.0.0.0 255.255.255.255
+
+R3(config)# route-map blokuj_odbierz_zR1 permit 10
+R3(config-route-map)# match ip address 26
+R3(config-route-map)# exit
+
+R3(config)# router bgp 65030
+R3(config-router)# neighbor 172.16.30.1 route-map blokuj_odbierz_zR1 in
+R3(config-router)# exit
+
+R3# clear ip bgp *
+```
+
+Weryfikacja na R3:
+```
+R3# show ip route
+```
+
+**Spodziewany wynik:** trasa do 10.1.1.0 na R3 idzie przez R2 (172.16.20.1), nie przez 172.16.30.1.
+
+### Alternatywna metoda – distribute-list (bez route-map)
+
+```
+R3(config)# access-list 25 deny 10.3.3.0 0.0.0.255
+R3(config)# access-list 25 permit 0.0.0.0 255.255.255.255
+
+R3(config)# router bgp 65030
+R3(config-router)# neighbor 172.16.30.1 distribute-list 25 out
+```
+
+Efekt taki sam jak route-map, ale bez definiowania route-map.
+
+---
+
+## Zadanie F – Redystrybucja IGP ↔ EGP (RIP ↔ BGP)
+
+### Zmiana topologii
+
+**Fizycznie:** odłącz kabel R2–R3. R2 przechodzi do AS 65010 (pracuje tylko pod RIP).
+
+```
+Nowa topologia:
+AS 65010: R1 (RIP + BGP) + R2 (tylko RIP)
+AS 65030: R3 (tylko BGP)
+
+R2 fa0/0 ←——→ R1 fa0/0 (sieć 172.16.10.0/24)
+R1 fa0/1 ←——→ R3 fa0/1 (sieć 172.16.30.0/24)
+```
+
+### KOMPUTER A – Wyłączenie BGP na R2, usunięcie sąsiadów z R1
+
+```
+! Na R2 – wyłącz BGP
+R2(config)# no router bgp 65020
+
+! Na R1 – usuń R2 jako sąsiada BGP (nie usuwa całego BGP!)
+R1(config)# router bgp 65010
+R1(config-router)# no neighbor 172.16.10.1 remote-as 65020
+R1(config-router)# exit
+```
+
+### KOMPUTER B – Usunięcie starego sąsiada z R3
+
+```
+R3(config)# router bgp 65030
+R3(config-router)# no neighbor 172.16.20.1 remote-as 65020
+R3(config-router)# exit
+```
+
+### KOMPUTER A – Włączenie RIP na R1 i R2
+
+**R1 (RIP + BGP):**
+```
+R1(config)# router rip
+R1(config-router)# version 2
+R1(config-router)# network 10.1.1.0
+R1(config-router)# network 172.16.10.0
+R1(config-router)# exit
+```
+
+**R2 (tylko RIP):**
+```
+R2(config)# router rip
+R2(config-router)# version 2
+R2(config-router)# network 10.2.2.0
+R2(config-router)# network 172.16.10.0
+R2(config-router)# exit
+```
+
+### Weryfikacja startowa (przed redystrybucją)
+
+```
+! R1 ma trasy RIP i BGP
+R1# show ip route
+
+! R3 nie widzi wnętrza AS 65010 (brak 10.2.2.0)
+R3# show ip route
+
+! R2 nie ma tras poza AS (brak 10.3.3.0)
+R2# show ip route
+```
+
+### KOMPUTER A – Redystrybucja RIP → BGP (R3 dowie się o R2)
+
+```
+R1(config)# router bgp 65010
+R1(config-router)# redistribute rip metric 3000
+R1(config-router)# exit
+```
+
+Sprawdź na R3:
+```
+R3# show ip route
+R3# show ip bgp
+```
+R3 powinien teraz widzieć sieć 10.2.2.0 z metryką 3000.
+
+### KOMPUTER A – Redystrybucja BGP → RIP (R2 dowie się o R3)
+
+```
+R1(config)# router rip
+R1(config-router)# redistribute bgp 65010 metric 15
+R1(config-router)# exit
+
+! Wymagane dodatkowe polecenie – włączenie redystrybucji wewnętrznych tras BGP
+R1(config)# router bgp 65010
+R1(config-router)# redistribute-internal
+R1(config-router)# exit
+```
+
+Sprawdź na R2:
+```
+R2# show ip route
+```
+R2 powinien widzieć trasy do sieci 10.3.3.0 i 172.16.30.0 jako trasy RIP (metryka 15).
+
+### Upewnij się, że sieć R1–R3 jest w BGP (ważne dla pingów zwrotnych)
+
+```
+R1(config)# router bgp 65010
+R1(config-router)# network 172.16.30.0 mask 255.255.255.0
+R1(config-router)# exit
+```
+
+### Finalny test komunikacji
+
+```
+! Ping z R2 do loopback R3
+R2# ping 10.3.3.1
+
+! Ping z R3 do loopback R2
+R3# ping 10.2.2.1
+```
+
+Oba pingi powinny przechodzić dzięki redystrybucji.
+
+---
+
+## Tabela kluczowych komend – szybka ściąga
+
+| Komenda | Opis |
+|---------|------|
+| `router bgp <ASN>` | Uruchomienie procesu BGP z danym numerem AS |
+| `neighbor <IP> remote-as <ASN>` | Rejestracja sąsiada BGP |
+| `network <sieć> [mask <maska>]` | Rozgłaszanie sieci przez BGP |
+| `show ip bgp` | Tablica BGP (wszystkie prefiksy) |
+| `show ip bgp summary` | Status sąsiadów BGP |
+| `show ip bgp <prefix>/<mask>` | Szczegóły konkretnej trasy BGP |
+| `clear ip bgp *` | Reset wszystkich sesji BGP |
+| `debug ip bgp` | Debug zdarzeń BGP na konsoli |
+| `route-map <nazwa> permit <nr>` | Tworzenie route-mapy |
+| `set metric <wartość>` | Ustawienie MED w route-mapie |
+| `set local-preference <wartość>` | Ustawienie LOCAL-PREF |
+| `set as-path prepend <ASN...>` | Wydłużanie AS-PATH |
+| `set weight <wartość>` | Ustawienie WEIGHT (tylko lokalny ruter) |
+| `set origin incomplete` | Origin = `?` (redystrybucja) |
+| `neighbor <IP> route-map <nazwa> in/out` | Przypisanie route-mapy do sąsiada |
+| `neighbor <IP> filter-list <nr> in/out` | Filtrowanie przez AS-PATH ACL |
+| `neighbor <IP> distribute-list <nr> in/out` | Filtrowanie przez IP ACL |
+| `redistribute rip metric <wartość>` | Redystrybucja RIP → BGP |
+| `redistribute bgp <ASN> metric <wartość>` | Redystrybucja BGP → RIP |
+| `redistribute-internal` | Włącz redystrybucję wewnętrznych tras BGP |
+| `ip as-path access-list <nr> deny/permit <regex>` | ACL na AS-PATH |
