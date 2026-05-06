@@ -941,3 +941,247 @@ C. Fałszywe wnioski
 Gdy oceniasz ważność cech na podstawie samplingu (tak jak w Twoim pętli for), widzisz tylko, jak dana cecha radzi sobie w losowym, ograniczonym środowisku. To nie mówi Ci, jak ważna byłaby ta cecha, gdyby model miał do dyspozycji pełen kontekst danych.
 
 ---
+
+## Z lab7
+
+### Algorytm KMeans (K-Średnich)
+
+KMeans to algorytm partycjonujący, który dzieli zbiór danych na $k$ rozłącznych grup (klastrów). Jego celem jest minimalizacja sumy kwadratów odległości między punktami a środkami ich klastrów (tzw. centroidami).
+
+Jak to działa krok po kroku?
+
+- Inicjalizacja: Wybierasz liczbę $k$ (liczbę grup). Algorytm losuje $k$ punktów, które stają się pierwszymi centroidami.
+
+- Przypisanie (Assignment): Dla każdego punktu w zbiorze danych obliczana jest odległość (zazwyczaj euklidesowa) do każdego z $k$ centroidów. Punkt zostaje przypisany do klastra, którego centroid jest najbliżej.
+
+- Aktualizacja (Update): Gdy wszystkie punkty są już przypisane, algorytm oblicza nową pozycję każdego centroidu. Nowy centroid to średnia arytmetyczna współrzędnych wszystkich punktów przypisanych do danej grupy.
+
+- Powtarzanie: Kroki 2 i 3 są powtarzane tak długo, aż centroidy przestaną się przesuwać lub zostanie osiągnięta maksymalna liczba iteracji.
+
+Kluczowe wzory
+
+- Odległość euklidesowa między punktem $x$ a centroidem $c$ w przestrzeni $n$-wymiarowej:
+
+$$d(x, c) = \sqrt{\sum_{i=1}^{n} (x_i - c_i)^2}$$
+
+### Silhouette Score (Wskaźnik Sylwetki)
+
+Sam algorytm KMeans nie powie Ci, czy wybrana liczba $k$ jest optymalna. Do tego służy Silhouette Score. Pozwala on zmierzyć, jak dobrze dany punkt pasuje do swojego klastra w porównaniu do klastrów sąsiednich.
+
+Jak obliczany jest wynik dla pojedynczego punktu?
+
+- Dla każdego punktu $i$ obliczamy dwie wartości:
+
+    - $a(i)$ (Kohezja): Średnia odległość punktu $i$ od wszystkich innych punktów w tym samym klastrze. Chcemy, aby ta wartość była jak najmniejsza (punkt blisko swoich "kolegów").
+
+    - $b(i)$ (Separacja): Średnia odległość punktu $i$ od punktów znajdujących się w najbliższym klastrze (tym, do którego punkt $i$ nie należy). Chcemy, aby ta wartość była jak największa.
+
+- Wzór na Silhouette Score dla punktu $i$: $$s(i) = \frac{b(i) - a(i)}{\max(a(i), b(i))}$$
+
+- Interpretacja wyników: Wskaźnik sylwetki przyjmuje wartości od -1 do 1:
+
+    - Blisko 1: Punkt jest bardzo dobrze przypisany. Jest blisko swojego klastra i daleko od innych.
+
+    - Blisko 0: Punkt znajduje się na granicy dwóch klastrów (klastry nachodzą na siebie).
+
+    - Blisko -1: Punkt prawdopodobnie został przypisany do błędnego klastra.
+
+Średni Silhouette Score dla całego zbioru danych pozwala nam wybrać najlepsze $k$ – zazwyczaj wybieramy taką liczbę klastrów, dla której średnia sylwetka jest najwyższa.
+
+### DBSCAN (Density-Based Spatial Clustering of Applications with Noise)
+
+1. Dwa kluczowe parametry
+
+Zanim DBSCAN ruszy do pracy, musimy zdefiniować dwie wartości:
+
+- $\epsilon$ (Epsilon): Promień sąsiedztwa. Określa, jak blisko siebie muszą być punkty, aby uznać je za "sąsiadów".
+
+- MinPts (Minimum Points): Minimalna liczba punktów, która musi znaleźć się wewnątrz promienia $\epsilon$ (wliczając sam punkt), aby dany obszar został uznany za gęsty i mógł stać się klastrem.
+
+2. Trzy rodzaje punktów
+
+DBSCAN dzieli wszystkie punkty w zbiorze na trzy kategorie:
+
+- Punkty rdzeniowe (Core Points): To punkty, które w promieniu $\epsilon$ mają co najmniej MinPts sąsiadów. To one są "silnikami" klastrów.
+
+- Punkty graniczne (Border Points): Mają mniej sąsiadów niż MinPts, ale znajdują się w promieniu $\epsilon$ od jakiegoś punktu rdzeniowego. Należą do klastra, ale nie mogą go dalej rozbudowywać.
+
+- Szum (Noise / Outliers): Punkty, które nie są rdzeniowe i do których nie można dotrzeć z żadnego punktu rdzeniowego. Są po prostu ignorowane przez algorytm.
+
+3. Algorytm krok po kroku
+
+- Wybór punktu: Algorytm wybiera losowy, nieodwiedzony jeszcze punkt ze zbioru.
+
+- Sprawdzanie gęstości: Sprawdza, ile punktów znajduje się w odległości $\epsilon$ od niego.
+
+- Tworzenie klastra: Jeśli punkt ma wystarczającą liczbę sąsiadów ($\ge MinPts$), staje się punktem rdzeniowym i zaczyna nowy klaster. Wszystkie punkty w jego otoczeniu ($\epsilon$) są dodawane do tego klastra.
+
+- Ekspansja: Algorytm sprawdza sąsiadów sąsiadów. Jeśli oni również są punktami rdzeniowymi, klaster "rozlewa się" dalej, dołączając kolejne punkty. Proces trwa, dopóki klaster nie przestanie rosnąć.
+
+- Obsługa szumu: Jeśli wybrany na początku punkt ma za mało sąsiadów i nie sąsiaduje z żadnym punktem rdzeniowym, zostaje oznaczony jako szum (tymczasowo, bo później może stać się punktem granicznym innego klastra).
+
+- Powtórzenie: Algorytm wybiera kolejny nieodwiedzony punkt i powtarza proces, aż przetworzy cały zbiór.
+
+4. Dlaczego DBSCAN jest potężny?
+
+Główną przewagą DBSCAN nad KMeans jest jego zdolność do radzenia sobie z klastrami o dowolnych kształtach. KMeans zawsze próbuje tworzyć "bańki" (klastry sferyczne), podczas gdy DBSCAN potrafi znaleźć klastry w kształcie liter, pierścieni czy linii.
+
+Główne zalety:
+
+- Nie musisz podawać liczby klastrów ($k$): Algorytm sam wykryje, ile grup znajduje się w danych.
+
+- Odporność na szum: Jako jeden z niewielu algorytmów potrafi wprost powiedzieć: "te punkty to błędy/anomalie, nie pasują nigdzie".
+
+- Dowolne kształty: Świetnie radzi sobie z danymi przestrzennymi i nietypowymi strukturami.
+
+Wady:
+
+- Wrażliwość na parametry: Wybór złego $\epsilon$ może sprawić, że wszystko stanie się jednym klastrem lub wszystko zostanie uznane za szum.
+
+- Różna gęstość: Jeśli w Twoich danych są klastry bardzo gęste i bardzo rzadkie, jedno $\epsilon$ nie zadziała dobrze dla obu jednocześnie.
+
+### Przekleństwo wymiarowości, Projekcja, Rozmaitość, Mainfold Learning
+
+1. Przekleństwo wymiarowości (The Curse of Dimensionality)
+
+Więcej danych to zwykle lepiej, ale więcej wymiarów (cech) to często przepis na katastrofę. 
+
+Dlaczego?
+
+- Pustka kosmiczna: Wraz ze wzrostem liczby wymiarów, objętość przestrzeni rośnie wykładniczo. Dane stają się niesamowicie rzadkie (sparse). Twoje 70 000 obrazków MNIST w przestrzeni 784-wymiarowej to tylko maleńkie, samotne punkty w nieskończonej próżni.
+
+- Zanikanie dystansu: W wysokich wymiarach odległość euklidesowa "wariuje". Odległość między najbliższym a najdalszym punktem staje się niemal taka sama. Wszystkie punkty wydają się być „daleko” i „tak samo blisko” jednocześnie, co zabija algorytmy oparte na odległości (jak KNN czy KMeans).
+
+- Overfitting: Przy ogromnej liczbie cech model łatwo znajduje przypadkowe korelacje, które są tylko szumem, a nie prawdziwą zależnością.
+
+2. Projekcje (Projections)
+
+Projekcja to najprostszy sposób na walkę z wymiarami. Wyobraź sobie, że świecisz latarką na trójwymiarowy obiekt, a na ścianie widzisz jego dwuwymiarowy cień.
+
+Jak to działa? 
+
+Rzutujemy punkty z przestrzeni $N$-wymiarowej na podprzestrzeń o mniejszej liczbie wymiarów ($d < N$).
+
+- Główny gracz: PCA (Principal Component Analysis). Algorytm szuka takich osi (kierunków), wzdłuż których dane są najbardziej rozproszone (mają największą wariancję), i na nie rzutuje dane.
+
+- Problem: Projekcja "płaska" (liniowa) zawodzi, gdy dane są zwinięte lub zakrzywione. Jeśli rzucisz cień "szwajcarskiej rolady" (Swiss Roll) na płaską kartkę, zgnieciesz jej strukturę i wymieszasz punkty, które w rzeczywistości są od siebie daleko.
+
+3. Rozmaitość (Manifold) i Hipoteza Rozmaitości
+
+To tutaj robi się ciekawie. Rozmaitość to przestrzeń, która lokalnie przypomina płaską przestrzeń euklidesową, ale globalnie może być bardzo skomplikowana (zakrzywiona).
+
+Przykład Ziemi: Z perspektywy mrówki idącej po ogrodzie, Ziemia jest płaska (2D). Ale my wiemy, że to zakrzywiona sferyczna rozmaitość osadzona w przestrzeni 3D.
+
+Hipoteza Rozmaitości (Manifold Hypothesis): Zakłada ona, że większość rzeczywistych danych o wysokiej wymiarowości (np. zdjęcia twarzy, cyfry MNIST) leży w rzeczywistości na znacznie niżej wymiarowej, zakrzywionej rozmaitości.
+
+- Przykład z MNIST: Obrazek cyfry ma 784 piksele (784 wymiary). Ale nie każda kombinacja pikseli tworzy cyfrę. Większość to po prostu losowy szum. Cyfry tworzą się tylko wtedy, gdy zmieniamy kilka parametrów: kąt nachylenia, grubość kreski, stopień domknięcia pętli w "8". Te kilka parametrów to właśnie te niskie wymiary ukryte wewnątrz 784-wymiarowej przestrzeni.
+
+4. Manifold Learning (Uczenie Rozmaitości)
+
+Zamiast brutalnie rzutować dane (jak PCA), algorytmy Manifold Learning (np. t-SNE, LLE, Isomap) próbują „rozwinąć” te zakrzywione struktury.
+
+Wyobraź sobie wspomnianą szwajcarską roladę:PCA próbowałoby ją spłaszczyć, miażdżąc warstwy ciasta.
+
+Algorytm rozmaitości próbuje ją delikatnie rozwinąć na stole tak, aby punkty, które są blisko siebie "w cieście", pozostały blisko siebie na płaszczyźnie.
+
+### PCA i SVD oraz kompresja jako efekt uboczny
+
+1. PCA (Principal Component Analysis) – Analiza Składowych Głównych
+
+PCA to metoda statystyczna, której celem jest uproszczenie danych przy zachowaniu jak największej ilości informacji (wariancji).
+
+Jak to działa w praktyce?
+
+Wyobraź sobie chmurę punktów w 3D, która układa się w kształt cygara. PCA znajduje nową oś (Składową Główną nr 1), która przechodzi idealnie wzdłuż tego cygara. To na tej osi punkty są najbardziej "rozstrzelone". Druga oś (Składowa Główna nr 2) jest prostopadła do pierwszej i wyłapuje resztę zmienności.
+
+- Centrowanie danych: Od każdej cechy odejmujemy jej średnią (przesuwamy chmurę punktów do środka układu współrzędnych).
+
+- Szukanie kierunków: PCA szuka kierunku, w którym dane mają największą wariancję.
+
+- Transformacja: Obracamy cały układ współrzędnych tak, aby nasze nowe osie (składowe) stały się nowymi wymiarami.
+
+2. SVD (Singular Value Decomposition) – Rozkład według wartości osobliwych
+
+SVD to czysta algebra. Twierdzi ona, że każdą macierz $A$ (nawet niekwadratową) można rozłożyć na iloczyn trzech specyficznych macierzy: 
+
+- $$A = U \Sigma V^T$$$U$ (Macierz lewostronnych wektorów osobliwych): Opisuje relacje między wierszami (np. w MNIST – między obrazkami).
+
+- $\Sigma$ (Sigma - Macierz diagonalna): Zawiera tzw. wartości osobliwe uporządkowane od największej do najmniejszej. Mówią nam one, jak ważna jest każda "składowa".
+
+- $V^T$ (Macierz prawostronnych wektorów osobliwych): Opisuje relacje między cechami (np. pikselami).
+
+SVD jest jak rozkładanie liczby na czynniki pierwsze (np. $12 = 2 \times 2 \times 3$), tylko robimy to dla skomplikowanych zbiorów danych.
+
+3. PCA vs SVD – Jaka jest różnica?
+
+To najczęstsze pytanie na rozmowach kwalifikacyjnych dla Data Scientistów.
+
+- SVD to narzędzie matematyczne: Możesz je zastosować do dowolnej macierzy. Nie wymaga ono, aby dane miały jakąś interpretację statystyczną.
+
+- PCA to proces statystyczny: PCA zazwyczaj używa SVD jako swojego silnika. Jeśli najpierw scentrujesz dane (odejmiesz średnią), a potem wykonasz na nich SVD, to wynik będzie identyczny z PCA. 
+
+W skrócie: PCA = Centrowanie danych + SVD.
+
+4. Kompresja jako "efekt uboczny"Gdy wykonasz SVD lub PCA, zauważysz, że wartości w macierzy $\Sigma$ (lub wariancja w PCA) drastycznie spadają. Pierwsze kilka składowych zawiera 90% informacji o danych, a reszta to często drobne detale lub zwykły szum.
+
+Na czym polega kompresja (Low-Rank Approximation)?
+
+Decydujemy się zachować tylko $k$ pierwszych składowych (tych najważniejszych), a resztę zerujemy.
+
+- Zysk: Zamiast trzymać 784 piksele dla każdego obrazka MNIST, trzymasz np. tylko 20 liczb. To ogromna oszczędność pamięci.
+
+- Efekt: Gdy spróbujesz odtworzyć obrazek z tych 20 liczb, będzie on nieco rozmazany, ale wciąż rozpoznawalny. Usunąłeś "szum" i zbędne szczegóły, zostawiając esencję (rozmaitość, o której mówiliśmy wcześniej).
+
+- Czyszczenie danych: Kompresja często poprawia działanie modeli ML, bo usuwa drobne, przypadkowe wahania w danych (overfitting), zostawiając tylko główne trendy.
+
+### CZym jest LLE
+
+LLE to algorytm z rodziny Manifold Learning (uczenia rozmaitości). Jego głównym założeniem jest to, że nawet jeśli zbiór danych jest bardzo skomplikowany i zakrzywiony globalnie (np. jak wspomniana wcześniej "szwajcarska rolada"), to jeśli spojrzymy na niego przez lupę, każdy mały fragment jest niemal płaski (liniowy).
+
+Serce algorytmu: "Pokaż mi swoich sąsiadów"
+
+- LLE próbuje zachować lokalne relacje między punktami. Zamiast patrzeć na to, jak daleko jest punkt A od punktu Z, patrzy na to, jak punkt A jest "zmontowany" ze swoich najbliższych sąsiadów.
+
+Algorytm składa się z trzech głównych kroków:
+
+- 1. Szukanie sąsiadów (Find Neighbors)
+
+    - Dla każdego punktu $x_i$ w zbiorze danych szukamy jego $k$ najbliższych sąsiadów (zazwyczaj używając zwykłej odległości euklidesowej).
+
+- 2. Rekonstrukcja wag (Weights Reconstruction)
+
+    - To jest najsprytniejsza część. Zakładamy, że każdy punkt $x_i$ można przedstawić jako liniową kombinację jego sąsiadów.
+
+    - Szukamy takich wag $w_{ij}$, aby błąd przybliżenia punktu $x_i$ przez jego sąsiadów był jak najmniejszy.
+
+    - Równanie: Minimalizujemy funkcję błędu:$$\varepsilon(W) = \sum_{i} \left| x_i - \sum_{j} w_{ij}x_j \right|^2$$
+
+    - Wagi muszą się sumować do 1 ($\sum w_{ij} = 1$), co sprawia, że są one odporne na przesunięcia czy obroty danych.
+
+- 3. Odwzorowanie w niskim wymiarze (Embedding)
+
+- Teraz "przenosimy" punkty do przestrzeni o niższym wymiarze (np. z 784D do 2D).
+
+- Zasada: Chcemy, aby w nowej, niskowymiarowej przestrzeni punkty $y_i$ były powiązane tymi samymi wagami $w_{ij}$, które wyliczyliśmy w kroku 2.
+
+- Wagi zostają zamrożone, a my szukamy nowych współrzędnych $y_i$, które najlepiej je "szanują": $$\Phi(Y) = \sum_{i} \left| y_i - \sum_{j} w_{ij}y_j \right|^2$$
+
+Dlaczego LLE jest wyjątkowe?
+
+LLE "rozsznurowuje" dane. Jeśli masz dane w kształcie litery "S" w 3D, PCA zmiażdży tę literę, nakładając jej końce na siebie. LLE natomiast rozprostuje ją do linii prostej na płaszczyźnie, zachowując informację o tym, kto obok kogo stał w oryginale.
+
+Zalety:
+
+- Nieliniowość: Świetnie radzi sobie z zawiniętymi strukturami.
+
+- Brak globalnych założeń: Nie obchodzi go, czy cała chmura danych ma kształt elipsy czy spirali – interesuje go tylko lokalna gęstość.
+
+- Mało parametrów: W zasadzie musisz wybrać tylko liczbę sąsiadów $k$ i docelowy wymiar.
+
+Wady:
+
+- Czułość na szum: Jeśli między warstwami "rolady" znajdzie się przypadkowy punkt (szum), LLE może błędnie "skleić" te warstwy.
+
+- Problemy z brzegami: Na krawędziach rozmaitości LLE czasem radzi sobie gorzej, bo punkty mają tam sąsiadów tylko z jednej strony.
+
+---
