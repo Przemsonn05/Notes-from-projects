@@ -1287,6 +1287,74 @@ Wady:
 
 - Różna gęstość: Jeśli w Twoich danych są klastry bardzo gęste i bardzo rzadkie, jedno $\epsilon$ nie zadziała dobrze dla obu jednocześnie.
 
+### Czym jest klasteryzacja
+
+Klasteryzacja vs Klasyfikacja – gdzie leży różnica?
+
+To najczęstsze miejsce, w którym początkujący analitycy danych się gubią.
+
+- Klasyfikacja (Nadzorowana): Masz kosz owoców. Dajesz modelowi 1000 zdjęć podpisanych "jabłko" i 1000 podpisanych "banan". Model uczy się ich cech. Kiedy dajesz mu nowy owoc, on mówi: "To z pewnością jest banan z prawdopodobieństwem 95%". Model wie, czego szuka.
+
+- Klasteryzacja (Nienadzorowana): Masz kosz dziwnych, kosmicznych owoców, których nikt nigdy nie widział i nie nazwał. Model analizuje je i dzieli na trzy grupy: "te twarde i okrągłe", "te podłużne i miękkie" oraz "te małe i kolczaste". Model nie ma pojęcia, co to jest. Po prostu zauważył, że pewne obiekty są do siebie bardzo podobne. Dopiero Ty (człowiek) musisz spojrzeć na te grupy i nadać im sens biznesowy.
+
+Do czego używa się klasteryzacji w prawdziwym świecie?
+
+Skoro algorytm nie daje nam konkretnych odpowiedzi ("to jest spam", "to jest kot"), to po co nam on? Okazuje się, że to jedno z najpotężniejszych narzędzi w biznesie:
+
+- Segmentacja klientów (Marketing): Sklepy internetowe mają góry danych o zakupach, ale nie wiedzą, kim są ich klienci. Klasteryzacja analizuje koszyki i wiek, po czym dzieli klientów na grupy. Nagle okazuje się, że masz wyraźny klaster "łowców weekendowych promocji", "rodziców kupujących pieluchy" i "entuzjastów elektroniki premium". Możesz dzięki temu wysyłać idealnie spersonalizowane reklamy.
+
+- Systemy Rekomendacji (Netflix / Spotify): Dlaczego Netflix wie, co Ci się spodoba? Bo algorytm umieścił Cię w jednym klastrze z milionem innych ludzi o podobnym guście. Jeśli 90% ludzi w Twoim klastrze świetnie oceniło nowy serial sci-fi, to Netflix poleci go również Tobie.
+
+- Wykrywanie Oszustw i Anomalii (Fraud Detection): Większość transakcji kartą kredytową jest nudna i przewidywalna – tworzą one jeden wielki, gęsty klaster "normalnych zachowań". Jeśli nagle ktoś kupuje trzy telewizory w kraju, w którym nigdy Cię nie było, ten punkt na wykresie wyląduje bardzo daleko od głównego klastra (będzie outlierem). System natychmiast blokuje kartę.
+
+- Medycyna i Genetyka: Badacze wrzucają do modelu dane o genach tysięcy pacjentów z podobnymi objawami. Klasteryzacja może odkryć, że choroba "X" to tak naprawdę trzy różne, delikatnie różniące się od siebie podtypy chorób, które wymagają innych leków.
+
+Podsumowując: klasteryzacja nie daje Ci gotowych odpowiedzi. Daje Ci kompas w świecie gigantycznego, chaotycznego oceanu danych, pozwalając dostrzec w nim porządek.
+
+### Inertia i Elbow Method
+
+1. Inercja (Inertia / WCSS)
+
+Inercja (w literaturze często spotykana pod skrótem WCSS, czyli Within-Cluster Sum of Squares) to wewnętrzna miara błędu algorytmu K-Means. Mówi nam ona o tym, jak bardzo "zbite" i spójne są nasze klastry.
+
+Zasada: Dla każdego punktu w klastrze mierzymy jego odległość do środka tego klastra (centroidu), podnosimy tę odległość do kwadratu (aby uniknąć wartości ujemnych i mocniej ukarać dalekie punkty), a na koniec sumujemy te wartości dla wszystkich punktów we wszystkich klastrach.
+
+Matematyka: $$WCSS = \sum_{j=1}^{k} \sum_{i \in C_j} d(x_i, \mu_j)^2$$
+
+Gdzie:
+
+- $k$ to całkowita liczba klastrów.
+
+- $C_j$ to zbiór punktów należących do klastra $j$.
+
+- $x_i$ to konkretny punkt danych.
+
+- $\mu_j$ to centroid (środek) klastra $j$.
+
+- $d$ to metryka odległości (np. euklidesowa).
+
+Interpretacja: Im mniejsza inercja, tym lepiej – oznacza to, że punkty leżą bardzo blisko swoich centroidów. Haczyk (Dlaczego sama inercja nie wystarczy?):
+
+- Możesz pomyśleć: "W takim razie znajdźmy takie $k$, dla którego inercja jest najmniejsza!". Tu pojawia się problem. Jeśli masz 100 punktów danych i ustawisz $k=100$ (każdy punkt jest swoim własnym klastrem i centroidem jednocześnie), odległość do środka wyniesie $0$. Inercja spadnie do idealnego zera, ale taki model jest całkowicie bezużyteczny. Inercja zawsze maleje (lub pozostaje bez zmian), gdy zwiększamy $k$.
+
+2. Metoda Łokcia (Elbow Method)
+
+Skoro inercja zawsze maleje wraz ze wzrostem liczby klastrów, musimy znaleźć optymalny kompromis (trade-off) między niską inercją a małą, sensowną biznesowo liczbą klastrów. Do tego służy Metoda Łokcia.
+
+Jak to działa krok po kroku:
+
+- Uruchamiamy algorytm K-Means wielokrotnie, za każdym razem zwiększając liczbę klastrów ($k=1, k=2, k=3, \dots$).
+
+- Dla każdego uruchomienia zapisujemy końcową wartość inercji.
+
+- Rysujemy wykres liniowy: na osi X odkładamy liczbę klastrów ($k$), a na osi Y obliczoną Inercję.
+
+Czego szukamy? Wykres ten zawsze będzie przypominał opadające ramię. Szukamy na nim "łokcia" (punktu przegięcia) – miejsca, w którym gwałtowny spadek inercji nagle zwalnia i staje się niemal płaski.
+
+Logika "Łokcia": Ten punkt oznacza, że dodawanie kolejnych klastrów nie przynosi już znaczącej poprawy w "zbiciu" danych. Zatem punkt przegięcia wyznacza optymalne $k$.
+
+## Z lab8
+
 ### Przekleństwo wymiarowości, Projekcja, Rozmaitość, Mainfold Learning
 
 1. Przekleństwo wymiarowości (The Curse of Dimensionality)
