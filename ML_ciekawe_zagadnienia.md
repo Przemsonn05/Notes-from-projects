@@ -1,5 +1,252 @@
 # Ciekawe zagadnienia bazując na labach z ML
 
+## lab 1 - wprowadzenie
+
+## Z lab2
+
+### SVC i SGD Classifier
+
+SVC (z rodziny Support Vector Machines - SVM) to niezwykle potężny algorytm klasyfikacyjny. Wyobraź sobie, że masz na stole rozsypane czerwone i niebieskie piłeczki. Twoim celem jest położenie między nimi prostego kija (hiperpłaszczyzny), tak aby rozdzielał kolory.
+
+Ale SVC idzie o krok dalej: nie szuka jakiegokolwiek kija. Szuka takiego kija, który jest jak najdalej od najbliższych piłeczek obu kolorów. Chce stworzyć jak najszerszą "ulicę" (margines) oddzielającą klasy. Piłeczki, które leżą na krawędziach tej "ulicy", to właśnie Wektory Nośne (Support Vectors) – one w 100% definiują położenie granicy. Reszta danych mogłaby w ogóle zniknąć!
+
+Co, jeśli danych nie da się oddzielić prostą linią? Tu wkracza magia, czyli tzw. Sztuczka Jądrowa (Kernel Trick). Model używa zaawansowanych funkcji matematycznych (np. RBF - Radial Basis Function), by w locie przenieść dane do wyższych wymiarów, gdzie nagle można je przekroić płaską kartką papieru.
+
+Funkcje matematyczne:
+
+- Równanie hiperpłaszczyzny (granicy decyzyjnej): $$w^T x + b = 0$$Gdzie $w$ to wektor wag (prostopadły do hiperpłaszczyzny), $x$ to cechy, a $b$ to przesunięcie (bias).
+
+- Szerokość marginesu: Wynosi $\frac{2}{||w||}$. Chcemy go zmaksymalizować, co matematycznie sprowadza się do minimalizacji $||w||$.
+
+- Funkcja celu optymalizacji (Miękki Margines): W prawdziwym świecie dane rzadko są idealnie separowalne, dlatego pozwalamy modelowi na drobne błędy za pomocą "zmiennych luzu" $\xi_i$ (xi).$$\min_{w, b, \xi} \left( \frac{1}{2} ||w||^2 + C \sum_{i=1}^{n} \xi_i \right)$$ Pod warunkiem: $y_i(w^T x_i + b) \ge 1 - \xi_i$ oraz $\xi_i \ge 0$.
+
+- Parametr $C$ jest tutaj królem:
+
+    - Małe $C$: "Wyluzowany" model, pozwala na błędy, byle "ulica" była szeroka (chroni przed overfittingiem).
+
+    - Duże $C$: Surowy model, drastycznie zwęża "ulicę", byle tylko każda kropka była po właściwej stronie (ryzyko overfittingu).
+
+Algorytm w uproszczeniu (Sekwencyjna Minimalizacja Optymalna - SMO):
+
+- Model rozwiązuje to równanie za pomocą zaawansowanego programowania kwadratowego (Quadratic Programming).
+
+- Zmapuj dane do wyższego wymiaru używając wybranego Jądra (Kernel: Linear, Polynomial, RBF).
+
+- Znajdź punkty leżące na brzegach (Wektory Nośne).
+
+- Wylicz wagi $w$ i $b$ tak, aby zrównoważyć maksymalizację marginesu z karą $C$ za błędnie sklasyfikowane punkty.
+
+- Klasyfikacja nowego punktu polega na sprawdzeniu, po której stronie hiperpłaszczyzny ten punkt wylądował.
+
+Standardowe modele (jak klasyczne SVC) podczas nauki analizują cały zbiór danych na raz, aby zrobić jeden krok optymalizacyjny. Przy milionach rekordów zużyje to całą pamięć RAM i potrwa wieki.
+
+SGDClassifier to sprinter. Bierze tylko jedną (lub kilka - tzw. mini-batch) losową próbkę, błyskawicznie zgaduje wynik, oblicza błąd, delikatnie poprawia wagi i biegnie do następnej próbki. Jego ścieżka do celu jest zygzakowata i chaotyczna ("stochastyczna"), ale na ogromnych zbiorach danych (Big Data) to często jedyny sposób na wytrenowanie modelu.
+
+Funkcje matematyczne:
+
+To, jakim matematycznie modelem stanie się SGDClassifier, zależy od wybranego parametru loss (funkcji kosztu $J(\theta)$).
+
+- Jeśli loss='hinge': Model staje się Liniowym SVM (Support Vector Machine).$$J(\theta) = \max(0, 1 - y_i(\theta^T x_i))$$
+
+- Jeśli loss='log_loss': Model staje się Regresją Logistyczną. $$J(\theta) = - \left[ y_i \log(h_\theta(x_i)) + (1 - y_i) \log(1 - h_\theta(x_i)) \right]$$
+
+Algorytm (Stochastic Gradient Descent):
+
+- Inicjalizacja: Ustaw losowe wagi $\theta$.
+
+- Epoki: Powtarzaj poniższe kroki dla całego zbioru (np. 100 razy).
+
+- Tasowanie (Shuffle): Wymieszaj zbiór danych treningowych.
+
+- Iteracja stochastyczna: Dla każdej pojedynczej próbki $i$ z danych:
+
+    - Oblicz predykcję używając aktualnych wag.
+
+    - Wylicz gradient funkcji kosztu tylko dla tej jednej próbki.
+
+    - Zaktualizuj wagi: $\theta := \theta - \eta \nabla J(\theta)$ (Gdzie $\eta$ to learning rate - krok uczenia, który stopniowo maleje z czasem).
+
+Zatrzymaj się, gdy straty przestaną spadać (algorytm zbiegł).
+
+### Accuracy score, Cross validation i Confusion matrix
+
+1. Confusion Matrix (Macierz Pomyłek)
+
+Gdy model klasyfikacyjny zgaduje (np. "czy to jest spam?", "czy pacjent jest chory?"), jego predykcje zderzają się z rzeczywistością. Macierz pomyłek to po prostu tabela $2 \times 2$ (dla dwóch klas), która w niezwykle przejrzysty sposób podsumowuje, gdzie dokładnie model się myli.Zamiast jednej liczby oznaczającej "błąd", macierz dzieli wyniki na cztery kategorie:
+
+- TP (True Positive) – Prawdziwie Pozytywne: Model powiedział "TAK" (np. to jest spam) i rzeczywistość to potwierdza. Pełen sukces.
+
+- TN (True Negative) – Prawdziwie Negatywne: Model powiedział "NIE" i miał rację. Sukces.
+
+- FP (False Positive) – Fałszywie Pozytywne (Błąd I rodzaju): Model powiedział "TAK", ale w rzeczywistości było "NIE". Zjawisko nadgorliwości (np. wrzucenie ważnego maila od szefa do folderu spam).
+
+- FN (False Negative) – Fałszywie Negatywne (Błąd II rodzaju): Model powiedział "NIE", ale w rzeczywistości było "TAK". Bardzo niebezpieczny błąd (np. odesłanie do domu chorego pacjenta z diagnozą, że jest zdrowy).
+
+Dzięki macierzy pomyłek od razu widać, czy nasz model ma tendencję do "nadgorliwości" (dużo FP), czy raczej jest "zbyt ostrożny" (dużo FN).
+
+2. Accuracy Score (Dokładność)
+
+Gdy mamy już Macierz Pomyłek, wyliczenie accuracy jest trywialne. Jest to po prostu odsetek wszystkich poprawnych odpowiedzi w stosunku do wszystkich prób.
+
+Wzór: $$Accuracy = \frac{TP + TN}{TP + TN + FP + FN}$$
+
+Problem i "Paradoks Dokładności":
+
+- Accuracy to najbardziej intuicyjna metryka, ale kryje w sobie gigantyczną pułapkę, gdy mamy do czynienia z niezbalansowanymi danymi (imbalanced data).
+
+- Wyobraź sobie, że budujesz model wykrywający rzadką chorobę, na którą choruje 1 osoba na 1000.
+
+- Piszesz fatalny model, który po prostu ignoruje dane pacjenta i ZAWSZE mówi: "Zdrowy" (czyli strzela samymi Negatywami).
+
+- Jaka będzie jego skuteczność? Zgadnie dla 999 osób i pomyli się tylko 1 raz.Jego Accuracy wynosi 99.9%. Brzmi świetnie, prawda?
+
+- A jednak model jest całkowicie bezużyteczny, bo nie wykrył ani jednej chorej osoby (współczynnik TP = 0). Dlatego przy niezbalansowanych klasach Accuracy odkładamy na bok na rzecz innych metryk (Precision, Recall, F1-Score).
+
+3. Cross-Validation (Walidacja Krzyżowa)
+
+Przejdźmy teraz do tego, jak testujemy model. Standardowy proces w Machine Learningu to podział danych na "Zbiór Treningowy" (np. 80% danych, na których model się uczy) i "Zbiór Testowy" (20% danych, których model nie widział i na których wyliczamy np. Accuracy).
+
+- Problem: Taki jednorazowy podział to loteria. A co, jeśli los tak sprawił, że do zbioru testowego trafiły same najłatwiejsze i najbardziej oczywiste przypadki? Model zdobędzie 100% dokładności na teście, uznamy go za genialny, a w prawdziwym świecie całkowicie polegnie.
+
+- Rozwiązanie: k-Fold Cross Validation (k-krotna walidacja krzyżowa): Zamiast dzielić dane raz, robimy to systematycznie i wielokrotnie, aby upewnić się, że model radzi sobie dobrze niezależnie od tego, jak potasujemy dane.
+
+Algorytm (na przykładzie $k=5$):
+
+- Podział: Zamiast podziału 80/20, dzielimy cały nasz zbiór danych na 5 równych części (zwanych foldami lub paczkami).
+
+- Iteracja 1: Zostawiamy paczkę nr 1 z boku jako Zbiór Testowy. Trenujemy model na paczkach 2, 3, 4 i 5. Zapisujemy wynik Accuracy.
+
+- Iteracja 2: Zostawiamy paczkę nr 2 jako Zbiór Testowy. Trenujemy model na paczkach 1, 3, 4 i 5. Zapisujemy wynik Accuracy.
+
+- Powtarzanie: Kontynuujemy to 5 razy, tak aby każda z paczek (od 1 do 5) była dokładnie raz użyta jako zbiór testowy.
+
+- Ocena końcowa: Wyciągamy średnią z 5 otrzymanych wyników Accuracy. Dodatkowo patrzymy na odchylenie standardowe wyników (jeśli raz wynik wynosi 95%, a w innej iteracji 60%, to znaczy, że nasz model jest bardzo niestabilny).
+
+Dzięki walidacji krzyżowej każdy pojedynczy wiersz w naszych danych zostanie wykorzystany zarówno w procesie uczenia, jak i testowania Zyskujemy pewność, że wynik jest miarodajny.
+
+## Z lab3
+
+### LinearRegression
+
+
+Regresja liniowa to model parametryczny, który zakłada, że relacja między zmiennymi objaśniającymi (cechami) a zmienną objaśnianą (wynikiem) jest wprost proporcjonalna. Model uczy się poprzez optymalizację wag tak, aby zminimalizować błąd. Najpopularniejszym sposobem "uczenia" (znajdowania wag) jest analityczna Metoda Najmniejszych Kwadratów (OLS) lub iteracyjny algorytm Spadku Gradientu (Gradient Descent).
+
+Funkcje matematyczne:
+
+- Hipoteza (Funkcja predykcji):$$h_\theta(x) = \theta_0 + \theta_1x_1 + \theta_2x_2 + \dots + \theta_nx_n = \theta^T x$$
+
+Gdzie $\theta$ to wektor wag, a $x$ to wektor cech (z $x_0 = 1$ dla wyrazu wolnego).
+
+- Funkcja kosztu (Mean Squared Error - MSE):$$J(\theta) = \frac{1}{2m} \sum_{i=1}^{m} (h_\theta(x^{(i)}) - y^{(i)})^2$$
+
+Gdzie $m$ to liczba próbek treningowych. Dzielenie przez $2$ ułatwia późniejsze liczenie pochodnej.
+
+Algorytm (Spadek Gradientu - Gradient Descent):
+
+- Inicjalizacja: Ustaw początkowe wartości wag $\theta$ (np. same zera lub małe wartości losowe).
+
+- Obliczanie predykcji: Dla każdej próbki w zbiorze danych oblicz przewidywaną wartość $h_\theta(x)$.
+
+- Obliczanie błędu: Porównaj predykcje z rzeczywistymi wartościami $y$ za pomocą funkcji kosztu.
+
+- Aktualizacja wag: Oblicz gradient (pochodną) funkcji kosztu i zaktualizuj każdą wagę, poruszając się w kierunku przeciwnym do gradientu (aby zminimalizować błąd): $$\theta_j := \theta_j - \alpha \frac{\partial}{\partial \theta_j} J(\theta)$$ $$\theta_j := \theta_j - \alpha \frac{1}{m} \sum_{i=1}^{m} (h_\theta(x^{(i)}) - y^{(i)}) x_j^{(i)}$$
+
+Gdzie $\alpha$ to współczynnik uczenia (learning rate) – decyduje, jak duże kroki robimy.
+
+### KNN
+
+k-NN to model nieparametryczny oparty na instancjach (instance-based learning). Nie posiada fazy "treningu" w tradycyjnym sensie – model po prostu zapamiętuje cały zbiór danych w pamięci (stąd nazwa lazy learning). Faza predykcji jest za to bardzo kosztowna obliczeniowo, ponieważ model musi za każdym razem obliczyć odległość nowego punktu od wszystkich punktów w zbiorze treningowym.
+
+Funkcje matematyczne:
+
+- Metryka odległości (np. Odległość Euklidesowa): $$d(x, x') = \sqrt{\sum_{j=1}^{n} (x_j - x'_j)^2}$$ (Inne popularne to odległość Manhattan lub Minkowskiego).
+
+- Funkcja predykcji (Regresja - średnia arytmetyczna sąsiadów): $$\hat{y} = \frac{1}{k} \sum_{i \in N_k(x)} y_i$$ Gdzie $N_k(x)$ to zbiór $k$ najbliższych sąsiadów dla punktu $x$.
+
+- Funkcja predykcji (Klasyfikacja - głosowanie większościowe): $$\hat{y} = \text{argmax}_c \sum_{i \in N_k(x)} I(y_i = c)$$ Gdzie $I$ to funkcja wskaźnikowa (zwraca 1, jeśli sąsiad należy do klasy $c$, inaczej 0).
+
+Algorytm (Predykcja dla nowego punktu $x_{nowy}$):
+
+- Wybór parametrów: Wybierz wartość $k$ (liczbę sąsiadów) oraz metrykę odległości.
+
+- Obliczanie odległości: Przejdź przez każdy punkt $x_{treningowy}$ w zbiorze danych i oblicz jego odległość od $x_{nowy}$.
+
+- Sortowanie: Posortuj wszystkie punkty treningowe rosnąco według obliczonej odległości.
+
+- Wybór sąsiadów: Wybierz $k$ pierwszych punktów z posortowanej listy (najbliższych sąsiadów).
+
+- Agregacja wyników:
+
+    - Jeśli to regresja: wyciągnij średnią z wartości $y$ tych $k$ sąsiadów.
+
+    - Jeśli to klasyfikacja: przypisz $x_{nowy}$ do najczęściej występującej klasy wśród sąsiadów.
+
+### Polynomial Features
+
+To technika transformacji danych wejściowych, a nie samodzielny model predykcyjny. Często nazywana jest regresją wielomianową, gdy połączymy ją z regresją liniową. Algorytmy liniowe potrafią modelować tylko płaskie powierzchnie. Generując nowe cechy, które są kombinacjami (np. $x_1 \cdot x_2$) i potęgami (np. $x_1^2, x_2^3$) oryginalnych cech, sztucznie zwiększamy wymiarowość danych. W tej nowej, wielowymiarowej przestrzeni model liniowy "widzi" płaską płaszczyznę, ale po zmapowaniu z powrotem do oryginalnej przestrzeni 2D/3D, ta płaszczyzna staje się krzywą (np. parabolą).
+
+Funkcje matematyczne:
+
+- Funkcja mapująca $\phi(x)$ (dla 1 cechy i stopnia $d$):$$\phi(x) = \begin{bmatrix} 1 \\ x \\ x^2 \\ \vdots \\ x^d \end{bmatrix}$$
+
+- Nowa funkcja predykcji (Wstawienie do regresji liniowej):$$h_\theta(x) = \theta_0 + \theta_1 x + \theta_2 x^2 + \dots + \theta_d x^d$$Matematycznie, traktujemy $x^2$ po prostu jako nową cechę $z_2$, a $x^d$ jako cechę $z_d$, co sprowadza problem do zwykłego równania: $h_\theta(z) = \theta^T z$.
+
+Algorytm (Inżynieria Cech + Trenowanie):
+
+- Określenie stopnia: Wybierz stopień wielomianu $d$ (uwaga: zbyt duże $d$ powoduje drastyczny overfitting i eksplozję liczby cech).
+
+- Transformacja macierzy: Dla każdego wektora cech $x^{(i)}$ w zbiorze danych, wygeneruj nowy wektor zawierający wszystkie potęgi i interakcje między cechami aż do stopnia $d$.
+
+- Podstawienie: Podmień oryginalny zbiór danych $X$ na nowy zbiór przetransformowany $\Phi(X)$.
+
+- Trening liniowy: Przeprowadź standardowy algorytm regresji liniowej (np. Spadek Gradientu) na nowym zbiorze $\Phi(X)$, aby znaleźć optymalne wagi $\theta$.
+
+### Metryki - MSE, RMSE, MAE i R2
+
+1. MAE (Mean Absolute Error – Średni Błąd Bezwzględny)
+
+Zacznijmy od najprostszej i najbardziej intuicyjnej metryki. MAE to po prostu średnia z różnic (w wartościach bezwzględnych) między tym, co model przewidział, a tym, co jest w rzeczywistości.
+
+Wzór: $$MAE = \frac{1}{n} \sum_{i=1}^{n} |y_i - \hat{y}_i|$$ (Gdzie $y_i$ to wartość rzeczywista, $\hat{y}_i$ to predykcja, a $n$ to liczba próbek).
+
+Jak to interpretować? Jeśli przewidujesz ceny mieszkań w tysiącach złotych, a Twój MAE wynosi 50, to znaczy, że Twój model myli się średnio o 50 tysięcy złotych na każdym mieszkaniu.
+
+Cechy: Traktuje wszystkie błędy proporcjonalnie. Pomyłka o 10 jest dokładnie dwa razy gorsza niż pomyłka o 5. Jest bardzo odporna na wartości odstające (outliery).
+
+2. MSE (Mean Squared Error – Błąd Średniokwadratowy)
+
+Zamiast wyciągać wartość bezwzględną z błędu, MSE podnosi każdy błąd do kwadratu, a dopiero potem wyciąga średnią. To najpopularniejsza funkcja kosztu podczas trenowania modeli (np. regresji liniowej czy sieci neuronowych).
+
+Wzór: $$MSE = \frac{1}{n} \sum_{i=1}^{n} (y_i - \hat{y}_i)^2$$
+
+Jak to interpretować? Interpretacja bywa trudna, bo zmieniają się jednostki. Jeśli przewidujesz ceny w złotówkach, MSE będzie wyrażone w "złotówkach do kwadratu" ($PLN^2$), co dla człowieka nie ma większego sensu.
+
+Cechy: Podnoszenie do kwadratu sprawia, że MSE brutalnie karze duże błędy. Jeśli model pomyli się o 2, kara wynosi 4. Jeśli pomyli się o 10, kara wynosi aż 100! Używamy MSE, gdy chcemy mieć pewność, że nasz model unika drastycznych pomyłek (nawet kosztem częstszych, ale malutkich błędów).
+
+3. RMSE (Root Mean Squared Error – Pierwiastek Błędu Średniokwadratowego)
+
+RMSE powstało po to, aby naprawić główny problem z MSE – dziwne jednostki. Robimy to w najprostszy możliwy sposób: wyciągamy pierwiastek z wyniku MSE.
+
+Wzór: $$RMSE = \sqrt{\frac{1}{n} \sum_{i=1}^{n} (y_i - \hat{y}_i)^2}$$
+
+Jak to interpretować? Wymiar wraca do normy. Wynik jest znowu w złotówkach, metrach czy kilogramach. Jest to wartość zazwyczaj nieco wyższa niż MAE.
+
+Cechy: Podobnie jak MSE, RMSE jest wrażliwe na wartości odstające, ale dzięki sprowadzeniu do oryginalnej jednostki, pozwala biznesowi lub badaczom łatwiej ocenić, czy model ma sens w rzeczywistym zastosowaniu.
+
+4. $R^2$ (R-Squared – Współczynnik Determinacji)
+
+To zupełnie inna bestia. Poprzednie metryki mówiły, "jak duży jest błąd". $R^2$ mówi, "o ile nasz model jest lepszy od zgadywania samej średniej".
+
+Wzór:$$R^2 = 1 - \frac{\text{Suma kwadratów błędów modelu (MSE)}}{\text{Suma kwadratów odchyleń od średniej (Wariancja)}}$$ $$R^2 = 1 - \frac{\sum (y_i - \hat{y}_i)^2}{\sum (y_i - \bar{y})^2}$$J
+
+ak to interpretować? $R^2$ przyjmuje wartości zazwyczaj od 0 do 1 (może być ujemne, jeśli model jest tragiczny).
+
+- $R^2 = 1$: Model idealnie przewiduje dane.
+
+- $R^2 = 0$: Model działa dokładnie tak samo, jakbyśmy zawsze jako odpowiedź podawali po prostu średnią wartość ze zbioru treningowego (jest bezużyteczny).
+
+- Wynik np. 0.85 oznacza, że "model tłumaczy 85% wariancji w danych".
+
 ## Z lab4
 
 ### Po co as_frame = True
