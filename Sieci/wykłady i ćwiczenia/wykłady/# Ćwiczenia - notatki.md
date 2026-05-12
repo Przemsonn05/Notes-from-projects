@@ -4870,3 +4870,194 @@ Oba pingi powinny przechodzić dzięki redystrybucji.
 | `redistribute bgp <ASN> metric <wartość>` | Redystrybucja BGP → RIP |
 | `redistribute-internal` | Włącz redystrybucję wewnętrznych tras BGP |
 | `ip as-path access-list <nr> deny/permit <regex>` | ACL na AS-PATH |
+
+# Lab 068 – Konfiguracja ruterów Cisco SHDSL (Mostkowanie)
+
+## Topologia
+
+```
+PC <---Ethernet---> Ruter CO (Slave) <---G.SHDSL---> Ruter CPE (Master) <---Ethernet---> PC
+```
+
+---
+
+## Krok 1 – Konfiguracja mostkowania IRB (na obu ruterach)
+
+```
+Router> enable
+Router# configure terminal
+
+Router(config)# bridge irb
+Router(config)# bridge 1 protocol ieee
+Router(config)# bridge 1 route ip
+Router(config)# ip forward-protocol spanning-tree
+```
+
+---
+
+## Krok 2 – Konfiguracja interfejsu Ethernet (na obu ruterach)
+
+```
+Router(config)# interface FastEthernet 0/0
+Router(config-if)# no ip address
+Router(config-if)# bridge-group 1
+Router(config-if)# no shutdown
+Router(config-if)# exit
+```
+
+Weryfikacja:
+```
+Router# show bridge
+Router# show spanning-tree brief
+```
+
+---
+
+## Krok 3 – Konfiguracja DSL
+
+Sprawdź dostępność kontrolera DSL:
+```
+Router(config)# controller DSL 0/0
+```
+- Jeśli komenda **dostępna** → wykonaj **Wariant 1**
+- Jeśli **niedostępna** → wykonaj **Wariant 2**
+
+---
+
+### WARIANT 1 – Konfiguracja przez kontroler DSL
+
+#### Strona CPE (Master)
+
+```
+Router(config)# controller DSL 0/0
+Router(config-controller)# dsl-mode shdsl symmetric annex A
+Router(config-controller)# mode atm
+Router(config-controller)# line-term cpe
+Router(config-controller)# line-mode auto
+Router(config-controller)# no shutdown
+Router(config-controller)# exit
+
+Router(config)# interface ATM 0/0
+Router(config-if)# no ip address
+Router(config-if)# bridge-group 1
+Router(config-if)# no shutdown
+Router(config-if)# atm ilmi-keepalive
+Router(config-if)# pvc tunnel 1/40
+Router(config-if-atm-vc)# encapsulation aal5snap
+Router(config-if-atm-vc)# exit
+Router(config-if)# exit
+```
+
+#### Strona CO (Slave)
+
+```
+Router(config)# controller DSL 0/0
+Router(config-controller)# dsl-mode shdsl symmetric annex A
+Router(config-controller)# mode atm
+Router(config-controller)# line-term co
+Router(config-controller)# line-mode auto
+Router(config-controller)# no shutdown
+Router(config-controller)# exit
+
+Router(config)# interface ATM 0/0
+Router(config-if)# no ip address
+Router(config-if)# bridge-group 1
+Router(config-if)# no shutdown
+Router(config-if)# atm ilmi-keepalive
+Router(config-if)# pvc tunnel 1/40
+Router(config-if-atm-vc)# encapsulation aal5snap
+Router(config-if-atm-vc)# exit
+Router(config-if)# exit
+```
+
+---
+
+### WARIANT 2 – Konfiguracja przez interfejs ATM
+
+#### Strona CPE (Master)
+
+```
+Router(config)# interface ATM 0/0
+Router(config-if)# no ip address
+Router(config-if)# bridge-group 1
+Router(config-if)# no shutdown
+Router(config-if)# dsl operating-mode gshdsl symmetric annex A
+Router(config-if)# dsl equipment-type cpe
+Router(config-if)# dsl linerate auto
+Router(config-if)# atm ilmi-keepalive
+Router(config-if)# pvc 1/40
+Router(config-if-atm-vc)# exit
+Router(config-if)# exit
+```
+
+#### Strona CO (Slave)
+
+```
+Router(config)# interface ATM 0/0
+Router(config-if)# no ip address
+Router(config-if)# bridge-group 1
+Router(config-if)# no shutdown
+Router(config-if)# dsl operating-mode gshdsl symmetric annex A
+Router(config-if)# dsl equipment-type co
+Router(config-if)# dsl linerate auto
+Router(config-if)# atm ilmi-keepalive
+Router(config-if)# pvc 1/40
+Router(config-if-atm-vc)# exit
+Router(config-if)# exit
+```
+
+> Jeśli linia DSL nie aktywuje się automatycznie, spróbuj ręcznie ustawić prędkość:
+> ```
+> Router(config-if)# dsl linerate 520
+> Router(config-if)# shutdown
+> Router(config-if)# no shutdown
+> ```
+
+---
+
+## Krok 4 – Konfiguracja interfejsu BVI (na obu ruterach)
+
+Interfejs BVI (Bridge Virtual Interface) umożliwia dostęp IP do rutera przez mostek.
+
+```
+Router(config)# interface BVI 1
+Router(config-if)# ip address 200.200.200.1 255.255.255.0
+Router(config-if)# exit
+```
+
+> Na drugim ruterze użyj innego adresu IP, np. `200.200.200.2`
+
+Skonfiguruj stacje PC z adresami z tej samej podsieci, np. `200.200.200.10/24`.
+
+---
+
+## Krok 5 – Weryfikacja
+
+```
+Router# show bridge
+Router# show spanning-tree brief
+Router# show interfaces ATM 0/0
+Router# show controllers DSL 0/0
+ping 200.200.200.2
+```
+
+---
+
+## Oczekiwane komunikaty po poprawnej konfiguracji
+
+```
+DSL 0/0 controller Link up! line rate: 2304 Kbps
+%CONTROLLER-5-UPDOWN: Controller DSL 0/0, changed state to up
+%LINEPROTO-5-UPDOWN: Line protocol on Interface ATM0/0, changed state to up
+%ATM-5-UPDOWN: Interface ATM0/0, Changing autovc 1/40 to PVC activated
+```
+
+---
+
+## Uwagi
+
+- Annex protokołu DSL (**A**, **B**, itd.) musi być **identyczny** po obu stronach
+- PVC w obu ruterach musi mieć takie same wartości **VPI/VCI** (np. `1/40`)
+- Enkapsulacja `aal5snap` jest wymagana po stronie **CO**, gdyż przenosi wiele protokołów (IP + ARP)
+- Jeśli DSL nie aktywuje się – odłącz i ponownie podłącz przewód DSL
+- Po zakończeniu konfiguracji zapisz ją: `Router# write memory`
