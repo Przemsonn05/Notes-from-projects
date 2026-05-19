@@ -5061,3 +5061,386 @@ DSL 0/0 controller Link up! line rate: 2304 Kbps
 - Enkapsulacja `aal5snap` jest wymagana po stronie **CO**, gdyż przenosi wiele protokołów (IP + ARP)
 - Jeśli DSL nie aktywuje się – odłącz i ponownie podłącz przewód DSL
 - Po zakończeniu konfiguracji zapisz ją: `Router# write memory`
+
+# Lab 039 – Konfiguracja sieci Frame Relay (Cisco)
+
+## Topologia
+
+```
+                  ┌──────────────────────┐
+                  │  Przełącznik FR (FRS)│
+                  │   (rutter z DCE)     │
+                  │  Serial 0, 1, 2      │
+                  └──┬──────┬──────┬─────┘
+                     │      │      │
+              DLCI 111│      │DLCI 121
+                     │      │     │DLCI 131
+              ┌──────┴┐  ┌──┴──┐ ┌┴─────┐
+              │  R1   │  │ R2  │ │  R3  │
+              │ DTE   │  │ DTE │ │ DTE  │
+              └───┬───┘  └──┬──┘ └──┬───┘
+                  │Eth      │Eth    │Eth
+                 PC1       PC2     PC3
+```
+
+Sieci point-to-point między pod-interfejsami:
+- **200.200.101.0/24** – R1 ↔ R2 (DLCI 111/112)
+- **200.200.102.0/24** – R1 ↔ R3 (DLCI 121/122)
+- **200.200.103.0/24** – R2 ↔ R3 (DLCI 131/132)
+
+---
+
+## Podział pracy między 2 komputery
+
+| Komputer | Konsole (PuTTY) do urządzeń |
+|---|---|
+| **PC1** | Przełącznik Frame Relay (FRS) + Ruter R1 |
+| **PC2** | Ruter R2 + Ruter R3 |
+
+---
+
+## Podłączenie kabli
+
+### Kable Serial (DCE/DTE)
+- **Przełącznik FR** musi być stroną **DCE** (kabel z oznaczeniem DCE)
+- **Rutery R1, R2, R3** są stronami **DTE**
+- W praktyce: zamontuj kable Serial tak, by **końcówka DCE** była po stronie przełącznika
+
+```
+FRS Serial0 (DCE) ──── (DTE) Serial0/0 R1
+FRS Serial1 (DCE) ──── (DTE) Serial0/0 R2
+FRS Serial2 (DCE) ──── (DTE) Serial0/0 R3
+```
+
+### Kable konsolowe (do PuTTY)
+- Każdy ruter podłącz przez **kabel konsolowy** (RJ-45 → COM/USB) do laptopa
+- W PuTTY: typ połączenia **Serial**, prędkość **9600 bps**, port np. **COM3**
+
+### Kable Ethernet
+- R1 ↔ PC1 (interfejs FastEthernet 0/0)
+- R2 ↔ PC2 (interfejs FastEthernet 0/0)
+- R3 ↔ PC3 *(opcjonalnie, można zastąpić interfejsem Loopback)*
+
+---
+
+# === PC1 ===
+
+## KONFIGURACJA PRZEŁĄCZNIKA FRAME RELAY (FRS)
+
+```
+FRS> enable
+FRS# configure terminal
+
+FRS(config)# frame-relay switching
+```
+
+### Interfejs Serial 0 (do R1)
+```
+FRS(config)# interface Serial 0
+FRS(config-if)# no ip address
+FRS(config-if)# no frame-relay inverse-arp
+FRS(config-if)# encapsulation frame-relay
+FRS(config-if)# frame-relay intf-type dce
+FRS(config-if)# no keepalive
+FRS(config-if)# clock rate 64000
+FRS(config-if)# frame-relay route 111 interface Serial 1 112
+FRS(config-if)# frame-relay route 121 interface Serial 2 122
+FRS(config-if)# no shutdown
+FRS(config-if)# exit
+```
+
+### Interfejs Serial 1 (do R2)
+```
+FRS(config)# interface Serial 1
+FRS(config-if)# no ip address
+FRS(config-if)# no frame-relay inverse-arp
+FRS(config-if)# encapsulation frame-relay
+FRS(config-if)# frame-relay intf-type dce
+FRS(config-if)# no keepalive
+FRS(config-if)# clock rate 64000
+FRS(config-if)# frame-relay route 112 interface Serial 0 111
+FRS(config-if)# frame-relay route 131 interface Serial 2 132
+FRS(config-if)# no shutdown
+FRS(config-if)# exit
+```
+
+### Interfejs Serial 2 (do R3)
+```
+FRS(config)# interface Serial 2
+FRS(config-if)# no ip address
+FRS(config-if)# no frame-relay inverse-arp
+FRS(config-if)# encapsulation frame-relay
+FRS(config-if)# frame-relay intf-type dce
+FRS(config-if)# no keepalive
+FRS(config-if)# clock rate 64000
+FRS(config-if)# frame-relay route 122 interface Serial 0 121
+FRS(config-if)# frame-relay route 132 interface Serial 1 131
+FRS(config-if)# no shutdown
+FRS(config-if)# exit
+FRS(config)# end
+```
+
+### Weryfikacja
+```
+FRS# show running-config
+FRS# show frame-relay route
+```
+
+---
+
+## KONFIGURACJA RUTERA R1
+
+```
+R1> enable
+R1# configure terminal
+```
+
+### Główny interfejs Serial 0/0
+```
+R1(config)# interface Serial 0/0
+R1(config-if)# no ip address
+R1(config-if)# encapsulation frame-relay
+R1(config-if)# no keepalive
+R1(config-if)# no shutdown
+R1(config-if)# exit
+```
+
+### Pod-interfejs do R2 (sieć 200.200.101.0/24, DLCI 111)
+```
+R1(config)# interface Serial 0/0.1 point-to-point
+R1(config-subif)# frame-relay interface-dlci 111
+R1(config-subif)# bandwidth 64
+R1(config-subif)# ip address 200.200.101.1 255.255.255.0
+R1(config-subif)# no shutdown
+R1(config-subif)# exit
+```
+
+### Pod-interfejs do R3 (sieć 200.200.102.0/24, DLCI 121)
+```
+R1(config)# interface Serial 0/0.2 point-to-point
+R1(config-subif)# frame-relay interface-dlci 121
+R1(config-subif)# bandwidth 64
+R1(config-subif)# ip address 200.200.102.1 255.255.255.0
+R1(config-subif)# no shutdown
+R1(config-subif)# exit
+```
+
+### Interfejs Ethernet do PC1
+```
+R1(config)# interface FastEthernet 0/0
+R1(config-if)# ip address 192.168.1.1 255.255.255.0
+R1(config-if)# no shutdown
+R1(config-if)# exit
+```
+
+### Routing RIP
+```
+R1(config)# ip routing
+R1(config)# ip classless
+R1(config)# router rip
+R1(config-router)# version 2
+R1(config-router)# network 200.200.101.0
+R1(config-router)# network 200.200.102.0
+R1(config-router)# network 192.168.1.0
+R1(config-router)# no auto-summary
+R1(config-router)# end
+```
+
+---
+
+# === PC2 ===
+
+## KONFIGURACJA RUTERA R2
+
+```
+R2> enable
+R2# configure terminal
+```
+
+### Główny interfejs Serial 0/0
+```
+R2(config)# interface Serial 0/0
+R2(config-if)# no ip address
+R2(config-if)# encapsulation frame-relay
+R2(config-if)# no keepalive
+R2(config-if)# no shutdown
+R2(config-if)# exit
+```
+
+### Pod-interfejs do R1 (sieć 200.200.101.0/24, DLCI 112)
+```
+R2(config)# interface Serial 0/0.1 point-to-point
+R2(config-subif)# frame-relay interface-dlci 112
+R2(config-subif)# bandwidth 64
+R2(config-subif)# ip address 200.200.101.2 255.255.255.0
+R2(config-subif)# no shutdown
+R2(config-subif)# exit
+```
+
+### Pod-interfejs do R3 (sieć 200.200.103.0/24, DLCI 131)
+```
+R2(config)# interface Serial 0/0.2 point-to-point
+R2(config-subif)# frame-relay interface-dlci 131
+R2(config-subif)# bandwidth 64
+R2(config-subif)# ip address 200.200.103.1 255.255.255.0
+R2(config-subif)# no shutdown
+R2(config-subif)# exit
+```
+
+### Interfejs Ethernet do PC2
+```
+R2(config)# interface FastEthernet 0/0
+R2(config-if)# ip address 192.168.2.1 255.255.255.0
+R2(config-if)# no shutdown
+R2(config-if)# exit
+```
+
+### Routing RIP
+```
+R2(config)# ip routing
+R2(config)# ip classless
+R2(config)# router rip
+R2(config-router)# version 2
+R2(config-router)# network 200.200.101.0
+R2(config-router)# network 200.200.103.0
+R2(config-router)# network 192.168.2.0
+R2(config-router)# no auto-summary
+R2(config-router)# end
+```
+
+---
+
+## KONFIGURACJA RUTERA R3
+
+```
+R3> enable
+R3# configure terminal
+```
+
+### Główny interfejs Serial 0/0
+```
+R3(config)# interface Serial 0/0
+R3(config-if)# no ip address
+R3(config-if)# encapsulation frame-relay
+R3(config-if)# no keepalive
+R3(config-if)# no shutdown
+R3(config-if)# exit
+```
+
+### Pod-interfejs do R2 (sieć 200.200.103.0/24, DLCI 132)
+```
+R3(config)# interface Serial 0/0.1 point-to-point
+R3(config-subif)# frame-relay interface-dlci 132
+R3(config-subif)# bandwidth 64
+R3(config-subif)# ip address 200.200.103.2 255.255.255.0
+R3(config-subif)# no shutdown
+R3(config-subif)# exit
+```
+
+### Pod-interfejs do R1 (sieć 200.200.102.0/24, DLCI 122)
+```
+R3(config)# interface Serial 0/0.2 point-to-point
+R3(config-subif)# frame-relay interface-dlci 122
+R3(config-subif)# bandwidth 64
+R3(config-subif)# ip address 200.200.102.2 255.255.255.0
+R3(config-subif)# no shutdown
+R3(config-subif)# exit
+```
+
+### Interfejs Ethernet (opcjonalnie, lub Loopback)
+```
+R3(config)# interface Loopback 0
+R3(config-if)# ip address 192.168.3.1 255.255.255.0
+R3(config-if)# no shutdown
+R3(config-if)# exit
+```
+
+### Routing RIP
+```
+R3(config)# ip routing
+R3(config)# ip classless
+R3(config)# router rip
+R3(config-router)# version 2
+R3(config-router)# network 200.200.102.0
+R3(config-router)# network 200.200.103.0
+R3(config-router)# network 192.168.3.0
+R3(config-router)# no auto-summary
+R3(config-router)# end
+```
+
+---
+
+## Tabela mapowania DLCI
+
+| Łącze | Sieć IP | Strona | Lokalne DLCI |
+|---|---|---|---|
+| R1 ↔ FRS ↔ R2 | 200.200.101.0/24 | R1 | 111 |
+| | | R2 | 112 |
+| R1 ↔ FRS ↔ R3 | 200.200.102.0/24 | R1 | 121 |
+| | | R3 | 122 |
+| R2 ↔ FRS ↔ R3 | 200.200.103.0/24 | R2 | 131 |
+| | | R3 | 132 |
+
+---
+
+## Weryfikacja (na każdym ruterze brzegowym)
+
+```
+R1# show frame-relay map
+R1# show frame-relay pvc
+R1# show ip route
+R1# show ip interface brief
+```
+
+### Testy ping (z R1)
+```
+R1# ping 200.200.101.2     # do R2
+R1# ping 200.200.102.2     # do R3
+R1# ping 200.200.103.1     # do R2 przez sieć Frame Relay
+R1# ping 200.200.103.2     # do R3 przez sieć Frame Relay
+```
+
+### Test komunikacji PC ↔ PC
+Na **PC1** (Windows):
+```
+ipconfig                   # sprawdź adres IP
+ping 192.168.2.10          # ping do PC2
+```
+
+---
+
+## Konfiguracja kart sieciowych na PC
+
+### PC1
+- IP: `192.168.1.10`
+- Maska: `255.255.255.0`
+- Brama: `192.168.1.1` (R1)
+
+### PC2
+- IP: `192.168.2.10`
+- Maska: `255.255.255.0`
+- Brama: `192.168.2.1` (R2)
+
+---
+
+## Zapisanie konfiguracji (na każdym urządzeniu)
+
+```
+Router# write memory
+```
+lub
+```
+Router# copy running-config startup-config
+```
+
+---
+
+## Najczęstsze problemy
+
+| Problem | Rozwiązanie |
+|---|---|
+| Interfejs Serial down | Sprawdź kabel DCE/DTE, włącz `clock rate` po stronie DCE |
+| `frame-relay route` nie działa | Co najmniej jeden interfejs musi być DCE |
+| `show frame-relay map` pusty | Sprawdź DLCI po obu stronach |
+| Brak komunikacji RIP | `no auto-summary` i `version 2` na wszystkich ruterach |
+| `keepalive` powoduje down | Wyłącz `no keepalive` w pod-interfejsach |
