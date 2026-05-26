@@ -5061,3 +5061,887 @@ DSL 0/0 controller Link up! line rate: 2304 Kbps
 - Enkapsulacja `aal5snap` jest wymagana po stronie **CO**, gdyż przenosi wiele protokołów (IP + ARP)
 - Jeśli DSL nie aktywuje się – odłącz i ponownie podłącz przewód DSL
 - Po zakończeniu konfiguracji zapisz ją: `Router# write memory`
+
+# Lab 039 – Konfiguracja sieci Frame Relay (Cisco)
+
+## Topologia
+
+```
+                  ┌──────────────────────┐
+                  │  Przełącznik FR (FRS)│
+                  │   (rutter z DCE)     │
+                  │  Serial 0, 1, 2      │
+                  └──┬──────┬──────┬─────┘
+                     │      │      │
+              DLCI 111│      │DLCI 121
+                     │      │     │DLCI 131
+              ┌──────┴┐  ┌──┴──┐ ┌┴─────┐
+              │  R1   │  │ R2  │ │  R3  │
+              │ DTE   │  │ DTE │ │ DTE  │
+              └───┬───┘  └──┬──┘ └──┬───┘
+                  │Eth      │Eth    │Eth
+                 PC1       PC2     PC3
+```
+
+Sieci point-to-point między pod-interfejsami:
+- **200.200.101.0/24** – R1 ↔ R2 (DLCI 111/112)
+- **200.200.102.0/24** – R1 ↔ R3 (DLCI 121/122)
+- **200.200.103.0/24** – R2 ↔ R3 (DLCI 131/132)
+
+---
+
+## Podział pracy między 2 komputery
+
+| Komputer | Konsole (PuTTY) do urządzeń |
+|---|---|
+| **PC1** | Przełącznik Frame Relay (FRS) + Ruter R1 |
+| **PC2** | Ruter R2 + Ruter R3 |
+
+---
+
+## Podłączenie kabli
+
+### Kable Serial (DCE/DTE)
+- **Przełącznik FR** musi być stroną **DCE** (kabel z oznaczeniem DCE)
+- **Rutery R1, R2, R3** są stronami **DTE**
+- W praktyce: zamontuj kable Serial tak, by **końcówka DCE** była po stronie przełącznika
+
+```
+FRS Serial0 (DCE) ──── (DTE) Serial0/0 R1
+FRS Serial1 (DCE) ──── (DTE) Serial0/0 R2
+FRS Serial2 (DCE) ──── (DTE) Serial0/0 R3
+```
+
+### Kable konsolowe (do PuTTY)
+- Każdy ruter podłącz przez **kabel konsolowy** (RJ-45 → COM/USB) do laptopa
+- W PuTTY: typ połączenia **Serial**, prędkość **9600 bps**, port np. **COM3**
+
+### Kable Ethernet
+- R1 ↔ PC1 (interfejs FastEthernet 0/0)
+- R2 ↔ PC2 (interfejs FastEthernet 0/0)
+- R3 ↔ PC3 *(opcjonalnie, można zastąpić interfejsem Loopback)*
+
+---
+
+# === PC1 ===
+
+## KONFIGURACJA PRZEŁĄCZNIKA FRAME RELAY (FRS)
+
+```
+FRS> enable
+FRS# configure terminal
+
+FRS(config)# frame-relay switching
+```
+
+### Interfejs Serial 0 (do R1)
+```
+FRS(config)# interface Serial 0
+FRS(config-if)# no ip address
+FRS(config-if)# no frame-relay inverse-arp
+FRS(config-if)# encapsulation frame-relay
+FRS(config-if)# frame-relay intf-type dce
+FRS(config-if)# no keepalive
+FRS(config-if)# clock rate 64000
+FRS(config-if)# frame-relay route 111 interface Serial 1 112
+FRS(config-if)# frame-relay route 121 interface Serial 2 122
+FRS(config-if)# no shutdown
+FRS(config-if)# exit
+```
+
+### Interfejs Serial 1 (do R2)
+```
+FRS(config)# interface Serial 1
+FRS(config-if)# no ip address
+FRS(config-if)# no frame-relay inverse-arp
+FRS(config-if)# encapsulation frame-relay
+FRS(config-if)# frame-relay intf-type dce
+FRS(config-if)# no keepalive
+FRS(config-if)# clock rate 64000
+FRS(config-if)# frame-relay route 112 interface Serial 0 111
+FRS(config-if)# frame-relay route 131 interface Serial 2 132
+FRS(config-if)# no shutdown
+FRS(config-if)# exit
+```
+
+### Interfejs Serial 2 (do R3)
+```
+FRS(config)# interface Serial 2
+FRS(config-if)# no ip address
+FRS(config-if)# no frame-relay inverse-arp
+FRS(config-if)# encapsulation frame-relay
+FRS(config-if)# frame-relay intf-type dce
+FRS(config-if)# no keepalive
+FRS(config-if)# clock rate 64000
+FRS(config-if)# frame-relay route 122 interface Serial 0 121
+FRS(config-if)# frame-relay route 132 interface Serial 1 131
+FRS(config-if)# no shutdown
+FRS(config-if)# exit
+FRS(config)# end
+```
+
+### Weryfikacja
+```
+FRS# show running-config
+FRS# show frame-relay route
+```
+
+---
+
+## KONFIGURACJA RUTERA R1
+
+```
+R1> enable
+R1# configure terminal
+```
+
+### Główny interfejs Serial 0/0
+```
+R1(config)# interface Serial 0/0
+R1(config-if)# no ip address
+R1(config-if)# encapsulation frame-relay
+R1(config-if)# no keepalive
+R1(config-if)# no shutdown
+R1(config-if)# exit
+```
+
+### Pod-interfejs do R2 (sieć 200.200.101.0/24, DLCI 111)
+```
+R1(config)# interface Serial 0/0.1 point-to-point
+R1(config-subif)# frame-relay interface-dlci 111
+R1(config-subif)# bandwidth 64
+R1(config-subif)# ip address 200.200.101.1 255.255.255.0
+R1(config-subif)# no shutdown
+R1(config-subif)# exit
+```
+
+### Pod-interfejs do R3 (sieć 200.200.102.0/24, DLCI 121)
+```
+R1(config)# interface Serial 0/0.2 point-to-point
+R1(config-subif)# frame-relay interface-dlci 121
+R1(config-subif)# bandwidth 64
+R1(config-subif)# ip address 200.200.102.1 255.255.255.0
+R1(config-subif)# no shutdown
+R1(config-subif)# exit
+```
+
+### Interfejs Ethernet do PC1
+```
+R1(config)# interface FastEthernet 0/0
+R1(config-if)# ip address 192.168.1.1 255.255.255.0
+R1(config-if)# no shutdown
+R1(config-if)# exit
+```
+
+### Routing RIP
+```
+R1(config)# ip routing
+R1(config)# ip classless
+R1(config)# router rip
+R1(config-router)# version 2
+R1(config-router)# network 200.200.101.0
+R1(config-router)# network 200.200.102.0
+R1(config-router)# network 192.168.1.0
+R1(config-router)# no auto-summary
+R1(config-router)# end
+```
+
+---
+
+# === PC2 ===
+
+## KONFIGURACJA RUTERA R2
+
+```
+R2> enable
+R2# configure terminal
+```
+
+### Główny interfejs Serial 0/0
+```
+R2(config)# interface Serial 0/0
+R2(config-if)# no ip address
+R2(config-if)# encapsulation frame-relay
+R2(config-if)# no keepalive
+R2(config-if)# no shutdown
+R2(config-if)# exit
+```
+
+### Pod-interfejs do R1 (sieć 200.200.101.0/24, DLCI 112)
+```
+R2(config)# interface Serial 0/0.1 point-to-point
+R2(config-subif)# frame-relay interface-dlci 112
+R2(config-subif)# bandwidth 64
+R2(config-subif)# ip address 200.200.101.2 255.255.255.0
+R2(config-subif)# no shutdown
+R2(config-subif)# exit
+```
+
+### Pod-interfejs do R3 (sieć 200.200.103.0/24, DLCI 131)
+```
+R2(config)# interface Serial 0/0.2 point-to-point
+R2(config-subif)# frame-relay interface-dlci 131
+R2(config-subif)# bandwidth 64
+R2(config-subif)# ip address 200.200.103.1 255.255.255.0
+R2(config-subif)# no shutdown
+R2(config-subif)# exit
+```
+
+### Interfejs Ethernet do PC2
+```
+R2(config)# interface FastEthernet 0/0
+R2(config-if)# ip address 192.168.2.1 255.255.255.0
+R2(config-if)# no shutdown
+R2(config-if)# exit
+```
+
+### Routing RIP
+```
+R2(config)# ip routing
+R2(config)# ip classless
+R2(config)# router rip
+R2(config-router)# version 2
+R2(config-router)# network 200.200.101.0
+R2(config-router)# network 200.200.103.0
+R2(config-router)# network 192.168.2.0
+R2(config-router)# no auto-summary
+R2(config-router)# end
+```
+
+---
+
+## KONFIGURACJA RUTERA R3
+
+```
+R3> enable
+R3# configure terminal
+```
+
+### Główny interfejs Serial 0/0
+```
+R3(config)# interface Serial 0/0
+R3(config-if)# no ip address
+R3(config-if)# encapsulation frame-relay
+R3(config-if)# no keepalive
+R3(config-if)# no shutdown
+R3(config-if)# exit
+```
+
+### Pod-interfejs do R2 (sieć 200.200.103.0/24, DLCI 132)
+```
+R3(config)# interface Serial 0/0.1 point-to-point
+R3(config-subif)# frame-relay interface-dlci 132
+R3(config-subif)# bandwidth 64
+R3(config-subif)# ip address 200.200.103.2 255.255.255.0
+R3(config-subif)# no shutdown
+R3(config-subif)# exit
+```
+
+### Pod-interfejs do R1 (sieć 200.200.102.0/24, DLCI 122)
+```
+R3(config)# interface Serial 0/0.2 point-to-point
+R3(config-subif)# frame-relay interface-dlci 122
+R3(config-subif)# bandwidth 64
+R3(config-subif)# ip address 200.200.102.2 255.255.255.0
+R3(config-subif)# no shutdown
+R3(config-subif)# exit
+```
+
+### Interfejs Ethernet (opcjonalnie, lub Loopback)
+```
+R3(config)# interface Loopback 0
+R3(config-if)# ip address 192.168.3.1 255.255.255.0
+R3(config-if)# no shutdown
+R3(config-if)# exit
+```
+
+### Routing RIP
+```
+R3(config)# ip routing
+R3(config)# ip classless
+R3(config)# router rip
+R3(config-router)# version 2
+R3(config-router)# network 200.200.102.0
+R3(config-router)# network 200.200.103.0
+R3(config-router)# network 192.168.3.0
+R3(config-router)# no auto-summary
+R3(config-router)# end
+```
+
+---
+
+## Tabela mapowania DLCI
+
+| Łącze | Sieć IP | Strona | Lokalne DLCI |
+|---|---|---|---|
+| R1 ↔ FRS ↔ R2 | 200.200.101.0/24 | R1 | 111 |
+| | | R2 | 112 |
+| R1 ↔ FRS ↔ R3 | 200.200.102.0/24 | R1 | 121 |
+| | | R3 | 122 |
+| R2 ↔ FRS ↔ R3 | 200.200.103.0/24 | R2 | 131 |
+| | | R3 | 132 |
+
+---
+
+## Weryfikacja (na każdym ruterze brzegowym)
+
+```
+R1# show frame-relay map
+R1# show frame-relay pvc
+R1# show ip route
+R1# show ip interface brief
+```
+
+### Testy ping (z R1)
+```
+R1# ping 200.200.101.2     # do R2
+R1# ping 200.200.102.2     # do R3
+R1# ping 200.200.103.1     # do R2 przez sieć Frame Relay
+R1# ping 200.200.103.2     # do R3 przez sieć Frame Relay
+```
+
+### Test komunikacji PC ↔ PC
+Na **PC1** (Windows):
+```
+ipconfig                   # sprawdź adres IP
+ping 192.168.2.10          # ping do PC2
+```
+
+---
+
+## Konfiguracja kart sieciowych na PC
+
+### PC1
+- IP: `192.168.1.10`
+- Maska: `255.255.255.0`
+- Brama: `192.168.1.1` (R1)
+
+### PC2
+- IP: `192.168.2.10`
+- Maska: `255.255.255.0`
+- Brama: `192.168.2.1` (R2)
+
+---
+
+## Zapisanie konfiguracji (na każdym urządzeniu)
+
+```
+Router# write memory
+```
+lub
+```
+Router# copy running-config startup-config
+```
+
+---
+
+## Najczęstsze problemy
+
+| Problem | Rozwiązanie |
+|---|---|
+| Interfejs Serial down | Sprawdź kabel DCE/DTE, włącz `clock rate` po stronie DCE |
+| `frame-relay route` nie działa | Co najmniej jeden interfejs musi być DCE |
+| `show frame-relay map` pusty | Sprawdź DLCI po obu stronach |
+| Brak komunikacji RIP | `no auto-summary` i `version 2` na wszystkich ruterach |
+| `keepalive` powoduje down | Wyłącz `no keepalive` w pod-interfejsach |
+
+---
+
+# Sieci Komputerowe – Lab 088, Cisco Catalyst 5500 (VLAN, RSM, Rutowanie)
+
+> **Uwaga ogólna:** Pracujemy na przełączniku zarządzalnym Cisco Catalyst 5500 z modułem RSM (Route Switch Module). Połączenie konsolowe: kabel DB9-RJ45 (BEZ rollover) do gniazda CONSOLE na karcie Supervisor. Parametry PuTTY: **9600 bps, 8 bitów, brak parzystości, 1 bit stopu, brak flow control**.
+
+---
+
+## Architektura sprzętu – co jest w chassis
+
+| Moduł / Karta            | System OS     | Rola                                      |
+|--------------------------|---------------|-------------------------------------------|
+| Supervisor (karta główna) | CatOS        | Zarządza przełączaniem L2, VLAN, STP      |
+| RSM (Route Switch Module) | Cisco IOS    | Rutuje datagramy IP między VLAN (L3)      |
+| LightStream ASP + ATM     | —            | Przełącznica ATM – w tym ćwiczeniu nieużywana |
+
+> Interfejs `sc0` – fizyczny port zarządzający w karcie Supervisor (CatOS).  
+> Interfejsy VLAN w RSM – wirtualne interfejsy L3 rutera.
+
+---
+
+## Zadanie A – Pierwsze połączenie, przegląd modułów
+
+### Logowanie do przełącznika (CatOS)
+
+Po podłączeniu kabla konsolowego i otwarciu PuTTY:
+
+```
+! Wciśnij Enter, pojawi się znak zachęty
+Cat5500> enable
+! Hasło: cisco lub puste (Enter)
+Cat5500> (enable)
+```
+
+Znak `(enable)` w karetce = zalogowano poprawnie w trybie uprzywilejowanym.
+
+### Przegląd zainstalowanych modułów
+
+```
+Cat5500> (enable) show module
+```
+
+Zobaczyć numer gniazda (slotu) każdego modułu – potrzebny do sesji z RSM.
+
+### Przełączenie do modułu RSM (lub ASP)
+
+```
+! Zastąp 5 numerem slotu RSM z output show module
+Cat5500> (enable) session 5
+```
+
+Połączenie nawiązane – pojawi się prompt IOS (`Router>`).
+
+**Wyjście z sesji do RSM (powrót do CatOS):**
+
+```
+Router> [naciśnij Ctrl+] ]
+telnet> quit
+Cat5500> (enable)
+```
+
+---
+
+## Zadanie B – Konfiguracja VLAN w module Supervisor (CatOS)
+
+### Krok 1 – Adresacja interfejsu zarządzającego sc0
+
+```
+! Zmieniamy względem oryginału: 192.168.50.x zamiast 192.168.123.x
+Cat5500> (enable) set interface sc0 192.168.50.10 255.255.255.0
+Cat5500> (enable) set ip route 0.0.0.0 192.168.50.1
+```
+
+### Krok 2 – Konfiguracja VTP
+
+```
+! Sprawdź aktualny stan VTP
+Cat5500> (enable) show vtp domain
+
+! Ustaw tryb transparent (nie propaguje VLAN do innych przełączników)
+Cat5500> (enable) set vtp mode transparent
+
+! Ustaw nazwę domeny VTP
+Cat5500> (enable) set vtp domain labsiec
+```
+
+### Krok 3 – Tworzenie VLAN i przypisywanie portów
+
+```
+! Utwórz trzy VLAN
+Cat5500> (enable) set vlan 10
+Cat5500> (enable) set vlan 20
+Cat5500> (enable) set vlan 30
+
+! Przypisz porty do VLAN (format: karta/port)
+! VLAN 10 – porty 1–8 na karcie 7
+Cat5500> (enable) set vlan 10 7/1-8
+
+! VLAN 20 – porty 9 i 10 na karcie 7
+Cat5500> (enable) set vlan 20 7/9-10
+
+! VLAN 30 – port 11 na karcie 7
+Cat5500> (enable) set vlan 30 7/11
+```
+
+> Porty światłowodowe Gigabit Ethernet Supervisora: `1/1` i `1/2`.
+
+### Kasowanie VLAN i cofanie portów
+
+```
+! Usuń VLAN 30
+Cat5500> (enable) clear vlan 30
+
+! Porty NIE wracają automatycznie do VLAN 1 – cofnij ręcznie
+Cat5500> (enable) set vlan 1 7/11
+```
+
+### Krok 4 – Weryfikacja VLAN
+
+```
+Cat5500> (enable) show vlan
+```
+
+Podłącz dwie stacje PC do portów tego samego VLAN i przetestuj ping. Uwaga: STP potrzebuje **30–60 sekund** na aktualizację mostu – poczekaj zanim zaczniesz testować.
+
+### Krok 5 – Diagnostyka Spanning Tree
+
+```
+! Ogólny stan STP
+Cat5500> (enable) show spantree active
+Cat5500> (enable) show spantree summary
+
+! STP dla konkretnego VLAN (np. VLAN 10)
+Cat5500> (enable) show spantree 10
+
+! STP dla konkretnego portu (slot/port)
+Cat5500> (enable) show spantree statistics 7/1
+```
+
+### Krok 6 – PortFast (skrócenie czasu STP dla portów końcowych)
+
+```
+! Włącz PortFast dla portów 7/1 do 7/11
+Cat5500> (enable) set spantree portfast 7/1-11 enable
+```
+
+> PortFast NIE wyłącza STP – tylko skraca czas wejścia portu w stan forwarding. Uważaj na pętle!
+
+### Krok 7 – Telnet do przełącznika przez sc0
+
+Z komputera PC (podłączonego do portu w VLAN 1):
+
+```
+telnet 192.168.50.10
+```
+
+Dane logowania takie same jak konsola RS232.
+
+### Krok 8 – Przeniesienie portu światłowodowego do VLAN 20
+
+```
+! Przenieś drugi port GigabitEthernet Supervisora do VLAN 20
+Cat5500> (enable) set vlan 20 1/2
+```
+
+Teraz można podłączyć dwa komputery do VLAN 20 i sprawdzić, że **komunikacja istnieje tylko w ramach tego samego VLAN** (stacje z VLAN 10 i VLAN 20 nie będą się wzajemnie pingować bez rutera).
+
+---
+
+## Zadanie C – Konfiguracja modułu RSM (Cisco IOS)
+
+### Połączenie z RSM
+
+```
+Cat5500> (enable) session 5
+Router> enable
+Router# configure terminal
+Router(config)#
+```
+
+### Krok 1 – Interfejs VLAN 1 rutera
+
+```
+! Adres INNY niż sc0 Supervisora (sc0 ma 192.168.50.10)
+Router(config)# interface vlan 1
+Router(config-if)# ip address 192.168.50.20 255.255.255.0
+Router(config-if)# no shutdown
+Router(config-if)# exit
+```
+
+> W VLAN 1 będą teraz DWA adresy IP: `sc0` (Supervisor, warstwa 2) i interfejs VLAN rutera (warstwa 3). To normalne.
+
+> **Warunek działania interfejsu VLAN rutera:** VLAN musi być zdefiniowany w Supervisorze ORAZ mieć podłączony aktywny port Ethernet z urządzeniem zewnętrznym (albo drugi aktywny ruter w chassis).
+
+### Krok 2 – Serwer HTTP rutera
+
+```
+Router(config)# ip http server
+```
+
+Wejdź przeglądarką na adres `http://192.168.50.20` – dostęp przez GUI Cisco.
+
+### Krok 3 – Dodatkowe interfejsy VLAN rutera
+
+```
+! VLAN 10 (zmienione: zamiast vlan 2 z oryginału)
+Router(config)# interface vlan 10
+Router(config-if)# ip address 10.10.10.1 255.255.255.0
+Router(config-if)# no shutdown
+Router(config-if)# exit
+
+! VLAN 20
+Router(config)# interface vlan 20
+Router(config-if)# ip address 10.10.20.1 255.255.255.0
+Router(config-if)# no shutdown
+Router(config-if)# exit
+```
+
+### Krok 4 – Weryfikacja interfejsów
+
+```
+Router# show ip interface brief
+```
+
+> Ruter posiada ukryty interfejs `127.0.0.X` (X = numer slotu) do wewnętrznego telnetu w chassis. Można go użyć: `Router# telnet 127.0.0.5`
+
+### Krok 5 – Konfiguracja PC i test routingu między VLAN
+
+Na stacji PC ustaw bramkę na adres interfejsu RSM w tym samym VLAN:
+- PC w VLAN 10 → bramka `10.10.10.1`
+- PC w VLAN 20 → bramka `10.10.20.1`
+
+```
+! Test routingu między VLAN – z PC w VLAN 10 ping do VLAN 20
+ping 10.10.20.X
+```
+
+### Krok 6 – Weryfikacja izolacji i rutowania
+
+Sprawdź:
+- PC w różnych VLAN **bez rutera** → brak komunikacji (izolacja L2)
+- PC w różnych VLAN **z RSM** → komunikacja przez ruter (L3)
+- Dostępność sc0 Supervisora z obu VLAN
+
+### Krok 7 – Podłączenie zewnętrznego rutera Cisco do VLAN
+
+Podłącz zewnętrzny ruter Cisco do portu zakwalifikowanego do wybranego VLAN (np. VLAN 10). Skonfiguruj adres w tej samej podsieci:
+
+```
+! Na zewnętrznym ruterze
+ExternalRouter(config)# interface FastEthernet0/0
+ExternalRouter(config-if)# ip address 10.10.10.2 255.255.255.0
+ExternalRouter(config-if)# no shutdown
+
+! Stwórz loopback do testów
+ExternalRouter(config)# interface Loopback0
+ExternalRouter(config-if)# ip address 172.31.1.1 255.255.255.0
+ExternalRouter(config-if)# no shutdown
+
+! Włącz RIP na obu ruterach
+ExternalRouter(config)# router rip
+ExternalRouter(config-router)# version 2
+ExternalRouter(config-router)# network 10.10.10.0
+ExternalRouter(config-router)# network 172.31.1.0
+
+Router(config)# router rip
+Router(config-router)# version 2
+Router(config-router)# network 10.10.10.0
+Router(config-router)# network 10.10.20.0
+```
+
+Test z PC w VLAN 20:
+```
+ping 172.31.1.1
+```
+
+### Krok 8–10 – Interfejs fizyczny przez moduł VIP
+
+Identyfikacja modułu VIP:
+```
+Router# show diag 9
+Router# show controllers cbus
+```
+
+Konfiguracja fizycznego interfejsu Fast Ethernet w VIP:
+```
+Router(config)# interface FastEthernet 1/0
+Router(config-if)# ip address 10.99.1.1 255.255.255.0
+Router(config-if)# no shutdown
+Router(config-if)# exit
+```
+
+Podłącz kabel do tego interfejsu i przetestuj:
+```
+Router# ping 10.99.1.2
+```
+
+---
+
+## Zadanie D – Kilka modułów RSM, sieć wielosegmentowa
+
+### Koncepcja
+
+W jednym chassis Catalyst 5500 mogą działać **trzy niezależne rutery RSM** (każdy ze swoim IOS). Każdy RSM rutuje między przypisanymi do niego VLAN. VLAN tranzytowe łączą RSM ze sobą.
+
+### Schemat sieci (zmieniona adresacja)
+
+```
+PC_A ── VLAN 40 ── RSM1 ── VLAN 50 ── RSM2 ── VLAN 60 ── RSM3 ── VLAN 70 ── PC_B
+```
+
+| VLAN | Sieć IP         | Bramy RSM                       |
+|------|-----------------|--------------------------------|
+| 40   | 10.40.0.0/24    | RSM1: 10.40.0.1                |
+| 50   | 10.50.0.0/24    | RSM1: 10.50.0.1 / RSM2: 10.50.0.2 |
+| 60   | 10.60.0.0/24    | RSM2: 10.60.0.1 / RSM3: 10.60.0.2 |
+| 70   | 10.70.0.0/24    | RSM3: 10.70.0.1                |
+
+### Konfiguracja Supervisora – przypisanie portów do VLAN
+
+```
+Cat5500> (enable) set vlan 40 3/1-5
+Cat5500> (enable) set vlan 50
+Cat5500> (enable) set vlan 60
+Cat5500> (enable) set vlan 70 3/6-10
+```
+
+### RSM1 – sesja i konfiguracja
+
+```
+Cat5500> (enable) session 5
+
+Router(config)# interface vlan 40
+Router(config-if)# ip address 10.40.0.1 255.255.255.0
+Router(config-if)# no shutdown
+Router(config-if)# exit
+
+Router(config)# interface vlan 50
+Router(config-if)# ip address 10.50.0.1 255.255.255.0
+Router(config-if)# no shutdown
+Router(config-if)# exit
+
+Router(config)# router rip
+Router(config-router)# version 2
+Router(config-router)# network 10.40.0.0
+Router(config-router)# network 10.50.0.0
+Router(config-router)# exit
+```
+
+### RSM2 – sesja i konfiguracja
+
+```
+Cat5500> (enable) session 6
+
+Router(config)# interface vlan 50
+Router(config-if)# ip address 10.50.0.2 255.255.255.0
+Router(config-if)# no shutdown
+Router(config-if)# exit
+
+Router(config)# interface vlan 60
+Router(config-if)# ip address 10.60.0.1 255.255.255.0
+Router(config-if)# no shutdown
+Router(config-if)# exit
+
+Router(config)# router rip
+Router(config-router)# version 2
+Router(config-router)# network 10.50.0.0
+Router(config-router)# network 10.60.0.0
+Router(config-router)# exit
+```
+
+### RSM3 – sesja i konfiguracja
+
+```
+Cat5500> (enable) session 7
+
+Router(config)# interface vlan 60
+Router(config-if)# ip address 10.60.0.2 255.255.255.0
+Router(config-if)# no shutdown
+Router(config-if)# exit
+
+Router(config)# interface vlan 70
+Router(config-if)# ip address 10.70.0.1 255.255.255.0
+Router(config-if)# no shutdown
+Router(config-if)# exit
+
+Router(config)# router rip
+Router(config-router)# version 2
+Router(config-router)# network 10.60.0.0
+Router(config-router)# network 10.70.0.0
+Router(config-router)# exit
+```
+
+### Konfiguracja PC
+
+| Stacja | Adres IP   | Brama      |
+|--------|------------|------------|
+| PC_A   | 10.40.0.10 | 10.40.0.1  |
+| PC_B   | 10.70.0.10 | 10.70.0.1  |
+
+### Weryfikacja trasy end-to-end
+
+```
+! Ścieżka pakietu: PC_A → VLAN40 → RSM1 → VLAN50 → RSM2 → VLAN60 → RSM3 → VLAN70 → PC_B
+! Z PC_A:
+ping 10.70.0.10
+tracert 10.70.0.10   (Windows) / traceroute 10.70.0.10 (Linux)
+```
+
+---
+
+## Zadanie E – Boot version RSM (testowy IOS z bootflash)
+
+### Sprawdzenie zawartości nośników
+
+```
+! Pełna wersja IOS na karcie PCMCIA
+Router# dir slot0:
+
+! Wersja testowa (boot) w bootflash
+Router# dir bootflash:
+```
+
+### Restart do wersji boot (wysuń kartę PCMCIA fizycznie, potem)
+
+```
+Router# reload
+```
+
+Po załadowaniu wersji boot – ograniczona funkcjonalność (brak protokołów rutowania dynamicznego, minimalne opcje).
+
+### Konfiguracja interfejsu fizycznego VIP w wersji boot
+
+```
+Router(config)# interface FastEthernet 1/0
+Router(config-if)# ip address 10.99.1.1 255.255.255.0
+Router(config-if)# no shutdown
+Router(config-if)# exit
+```
+
+### Zmiana domyślnej bramy w Supervisorze (konieczne do pingu z sc0)
+
+```
+! Usuń starą bramkę
+Cat5500> (enable) clear ip route 0.0.0.0 192.168.50.1
+
+! Ustaw nową bramkę wskazującą na interfejs RSM w VLAN 1
+Cat5500> (enable) set ip route 0.0.0.0 192.168.50.20
+
+! Test pingu do interfejsu fizycznego VIP
+Cat5500> (enable) ping 10.99.1.1
+
+! Traceroute
+Cat5500> (enable) trace 10.99.1.1
+```
+
+---
+
+## Tabela kluczowych komend – szybka ściąga
+
+### CatOS (Supervisor)
+
+| Komenda | Opis |
+|---------|------|
+| `show module` | Lista modułów w chassis |
+| `session <slot>` | Połączenie z modułem RSM/ASP |
+| `set interface sc0 <IP> <maska>` | Adres IP interfejsu zarządzającego |
+| `set ip route 0.0.0.0 <brama>` | Domyślna trasa Supervisora |
+| `clear ip route 0.0.0.0 <brama>` | Usuń domyślną trasę |
+| `show vtp domain` | Stan VTP |
+| `set vtp mode transparent` | Tryb VTP transparent |
+| `set vtp domain <nazwa>` | Nazwa domeny VTP |
+| `set vlan <VID>` | Utwórz VLAN |
+| `set vlan <VID> <karta>/<porty>` | Przypisz porty do VLAN |
+| `clear vlan <VID>` | Usuń VLAN |
+| `show vlan` | Lista VLAN i przypisanych portów |
+| `show spantree active` | Aktywne drzewo STP |
+| `show spantree <VID>` | STP dla danego VLAN |
+| `show spantree statistics <slot/port>` | Statystyki STP portu |
+| `set spantree portfast <porty> enable` | PortFast dla portów końcowych |
+| `ping <IP>` | Ping z Supervisora |
+| `trace <IP>` | Traceroute z Supervisora |
+
+### IOS (RSM)
+
+| Komenda | Opis |
+|---------|------|
+| `show module` | Moduły w chassis (z poziomu RSM) |
+| `show diag 9` | Diagnostyka modułu VIP |
+| `show controllers cbus` | Kontrolery i moduły VIP |
+| `show ip interface brief` | Stan interfejsów IP |
+| `interface vlan <VID>` | Konfiguracja wirtualnego interfejsu VLAN |
+| `interface FastEthernet 1/0` | Konfiguracja fizycznego interfejsu VIP |
+| `ip http server` | Włącz serwer HTTP (GUI Cisco) |
+| `dir slot0:` | Zawartość karty PCMCIA |
+| `dir bootflash:` | Zawartość pamięci bootflash |
+| `reload` | Restart rutera |
+| `telnet 127.0.0.<slot>` | Wewnętrzny telnet do RSM w chassis |
+
+---
