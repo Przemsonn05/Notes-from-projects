@@ -4871,7 +4871,7 @@ Oba pingi powinny przechodzić dzięki redystrybucji.
 | `redistribute-internal` | Włącz redystrybucję wewnętrznych tras BGP |
 | `ip as-path access-list <nr> deny/permit <regex>` | ACL na AS-PATH |
 
-# Lab 068 – Konfiguracja ruterów Cisco SHDSL (Mostkowanie)
+ # Lab 068 – Konfiguracja ruterów Cisco SHDSL (Mostkowanie)
 
 ## Topologia
 
