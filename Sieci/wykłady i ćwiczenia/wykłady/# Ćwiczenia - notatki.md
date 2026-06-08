@@ -5945,3 +5945,375 @@ Cat5500> (enable) trace 10.99.1.1
 | `telnet 127.0.0.<slot>` | Wewnętrzny telnet do RSM w chassis |
 
 ---
+
+# Laboratorium 048 — Statefull Firewall na ruterach Cisco (Context Based Access Control)
+
+Konfiguracja zapory stanowej opartej o reguły inspekcji (CBAC). Udostępnianie wybranych usług DMZ do sieci publicznej.
+
+---
+
+## 1. Topologia i adresacja
+
+```
+   [Komputer 2 = stacja PC]                 [Ruter R1 = FIREWALL]              [Ruter R2 = serwer usług]
+   sieć PUBLIC                                                                 sieć PRIVATE (DMZ)
+   200.200.201.2/24  ──────── fa0/1 (200.200.201.1)  R1  fa0/0 (200.200.200.1) ──────── fa0/0 (200.200.200.2)
+   GW: 200.200.201.1                                                           GW (default route): 200.200.200.1
+```
+
+| Urządzenie | Interfejs | Adres IP | Maska | Brama / trasa domyślna |
+|---|---|---|---|---|
+| R2 (serwer) | fa0/0 | 200.200.200.2 | 255.255.255.0 | 0.0.0.0/0 → 200.200.200.1 |
+| R1 (firewall) | fa0/0 (private) | 200.200.200.1 | 255.255.255.0 | — |
+| R1 (firewall) | fa0/1 (public) | 200.200.201.1 | 255.255.255.0 | — |
+| PC (stacja test.) | NIC | 200.200.201.2 | 255.255.255.0 | 200.200.201.1 |
+
+**Idea działania CBAC:** listami ACL blokujemy ruch w jednym kierunku oraz cały ruch powrotny w drugim. Następnie reguły inspekcji śledzą ruch dozwolony przez ACL i **dynamicznie przepuszczają związany z nim ruch powrotny**, liberalizując blokadę w przeciwnym kierunku.
+
+---
+
+## 2. Podział pracy na 2 komputery
+
+| | **KOMPUTER 1** | **KOMPUTER 2** |
+|---|---|---|
+| Rola | Konfiguracja **R2** (serwer usług w sieci private/DMZ) | Konfiguracja **R1** (firewall) **+ rola stacji PC** w sieci public |
+| Połączenie konsolowe (PuTTY Serial) | do rutera **R2** | do rutera **R1** |
+| Połączenie sieciowe NIC | — | karta sieciowa wpięta do fa0/1 R1 (sieć public) → stacja testowa |
+| Zadania | usługi telnet/WWW/SSH, adresacja, trasa domyślna | ACL, inspekcja, adresacja, **testy usług, debug, diagnostyka** |
+
+> **Kolejność wykonania:** najpierw KOMPUTER 1 kończy R2, równolegle KOMPUTER 2 konfiguruje R1, na końcu KOMPUTER 2 ustawia adres PC i przeprowadza testy. Oba komputery koordynują się przy testach (R2 może obserwować logi, R1 — debug i sesje inspekcji).
+
+---
+
+## 3. Podłączenie PuTTY do konsoli rutera (oba komputery)
+
+Połączenie konsolowe przez kabel rollover / USB-konsola:
+
+1. Uruchom **PuTTY**.
+2. **Connection type:** `Serial`.
+3. **Serial line:** Twój port COM (sprawdź w *Menedżerze urządzeń → Porty (COM i LPT)*, np. `COM3`).
+4. **Speed:** `9600`.
+5. (Opcjonalnie) zakładka **Connection → Serial:** Data bits `8`, Stop bits `1`, Parity `None`, Flow control `None`.
+6. **Open** → naciśnij Enter, aby zobaczyć znak zachęty rutera.
+
+Po wejściu wykonaj na każdym ruterze:
+
+```
+enable
+configure terminal
+```
+
+---
+
+# ====================================================================
+# KOMPUTER 1 — Ruter R2 (serwer usług testowych)
+# ====================================================================
+
+PuTTY (Serial) → konsola R2. Po `enable` i `configure terminal`:
+
+```cisco
+hostname R2
+
+! --- usługa WWW z uwierzytelnianiem lokalnym ---
+ip http server
+ip http authentication local
+
+! --- konto i hasła ---
+aaa new-model
+username sieci privilege 15 password 0 sieci
+enable password sieci
+
+! --- klucze RSA dla SSH (domena musi być ustawiona PRZED generowaniem) ---
+ip domain-name sieci
+crypto key generate rsa
+! Na pytanie o rozmiar klucza podaj: 1024  (lub 2048)
+
+! --- dostęp zdalny: telnet + ssh ---
+line vty 0 15
+ transport input all
+ login local
+ exit
+
+! --- adresacja i trasa domyślna do firewalla R1 ---
+interface fa 0/0
+ ip address 200.200.200.2 255.255.255.0
+ no shutdown
+ exit
+
+ip route 0.0.0.0 0.0.0.0 200.200.200.1
+```
+
+Zapis konfiguracji:
+
+```cisco
+end
+write memory
+```
+
+Szybka weryfikacja R2:
+
+```cisco
+show ip interface brief
+show running-config
+```
+
+> Po tym kroku R2 jest gotowy. KOMPUTER 1 może obserwować logowania (`terminal monitor` + `debug ip http ...` opcjonalnie) podczas testów wykonywanych z KOMPUTERA 2.
+
+---
+
+# ====================================================================
+# KOMPUTER 2 — Ruter R1 (statefull firewall) + stacja PC
+# ====================================================================
+
+## 4. Konfiguracja R1 (PuTTY Serial → konsola R1)
+
+Po `enable` i `configure terminal`:
+
+```cisco
+hostname R1
+```
+
+### 4.1. Lista ACL dopuszczająca usługi z sieci public do serwera (private)
+
+```cisco
+ip access-list extended uslugi
+ permit icmp any any
+ permit tcp any host 200.200.200.2 eq www
+ permit tcp any host 200.200.200.2 eq telnet
+ permit tcp any host 200.200.200.2 eq 22
+ exit
+```
+(`22` = standardowy port TCP dla SSH)
+
+### 4.2. Interfejs do sieci PUBLIC + aktywacja listy dla ruchu wchodzącego
+
+```cisco
+interface fa 0/1
+ ip address 200.200.201.1 255.255.255.0
+ ip access-group uslugi in
+ no ip redirects
+ no ip unreachables
+ no ip proxy-arp
+ no shutdown
+ exit
+```
+
+### 4.3. Lista ACL całkowicie blokująca ruch z drugiej strony (ruch powrotny)
+
+```cisco
+ip access-list extended blokada
+ deny ip any any
+ exit
+```
+
+### 4.4. Interfejs do sieci PRIVATE + przypisanie blokady (ruch wchodzący)
+
+```cisco
+interface fa 0/0
+ ip address 200.200.200.1 255.255.255.0
+ ip access-group blokada in
+ no shutdown
+ exit
+```
+
+### 4.5. Reguły inspekcji (CBAC)
+
+```cisco
+ip inspect log drop-pkt
+ip inspect name inspekcja icmp
+ip inspect name inspekcja tcp
+ip inspect name inspekcja dns
+```
+(`ip inspect log drop-pkt` — zapis w logu informacji o pakietach odrzuconych w ruchu powrotnym)
+
+### 4.6. Uruchomienie inspekcji na interfejsie public (ten sam, na którym jest lista `uslugi`)
+
+```cisco
+interface fa 0/1
+ ip inspect inspekcja in
+ exit
+```
+
+Zapis konfiguracji:
+
+```cisco
+end
+write memory
+```
+
+---
+
+## 5. Konfiguracja stacji PC (KOMPUTER 2 — system operacyjny)
+
+Karta sieciowa wpięta do fa0/1 R1 (sieć public). Ustaw statycznie:
+
+- Adres IP: `200.200.201.2`
+- Maska: `255.255.255.0`
+- Brama domyślna: `200.200.201.1`
+
+**Windows (CMD jako administrator), nazwę interfejsu sprawdź `netsh interface show interface`:**
+
+```cmd
+netsh interface ip set address name="Ethernet" static 200.200.201.2 255.255.255.0 200.200.201.1
+ipconfig
+ping 200.200.201.1
+```
+
+---
+
+## 6. Testy usług (KOMPUTER 2 — z poziomu stacji PC)
+
+Cel: ze stacji PC w sieci public połączyć się z usługami serwera R2 (`200.200.200.2`).
+
+### 6.1. Ping (ICMP)
+```cmd
+ping 200.200.200.2
+```
+
+### 6.2. WWW — przeglądarka
+Otwórz w przeglądarce: `http://200.200.200.2`
+Logowanie: użytkownik **sieci**, hasło **sieci**.
+
+### 6.3. Telnet — PuTTY
+- PuTTY → **Connection type: Telnet**
+- **Host Name:** `200.200.200.2`, **Port:** `23` → **Open**
+- Logowanie: **sieci** / **sieci**
+
+### 6.4. SSH — PuTTY
+- PuTTY → **Connection type: SSH**
+- **Host Name:** `200.200.200.2`, **Port:** `22` → **Open**
+- Login: **sieci**, hasło: **sieci**
+
+> Wszystkie usługi powinny działać — ACL `uslugi` przepuszcza ruch do serwera, a inspekcja CBAC dynamicznie otwiera ruch powrotny mimo listy `blokada`.
+
+---
+
+## 7. Diagnostyka i debug podczas testów (KOMPUTER 2 — konsola R1)
+
+Włącz tryby debug PRZED uruchomieniem testów:
+
+```cisco
+debug ip inspect object-creation
+debug ip inspect protocol tcp
+debug ip inspect protocol icmp
+```
+
+Podgląd aktywnych sesji firewalla stanowego (w trakcie testów):
+
+```cisco
+show ip inspect sessions
+```
+
+Komendy diagnostyczne:
+
+```cisco
+show ip inspect all
+show ip inspect statistics
+show ip inspect interfaces
+show ip access-lists
+```
+
+Wyłączenie debugowania po testach:
+
+```cisco
+undebug all
+```
+
+> Jeśli komunikaty debug nie pojawiają się w sesji PuTTY przez VTY/SSH do R1, włącz `terminal monitor`. Na konsoli (Serial) wyświetlają się domyślnie.
+
+---
+
+## 8. Test kontrolny — wyłączenie inspekcji
+
+Po sprawdzeniu poprawności usług anuluj inspekcję, aby o blokowaniu decydowały **tylko ACL**:
+
+```cisco
+configure terminal
+interface fa 0/1
+ no ip inspect inspekcja in
+ end
+```
+
+Powtórz testy z punktu 6 (ping / WWW / telnet / SSH). **Połączenia powinny zostać teraz zablokowane** — bez inspekcji ruch powrotny od R2 trafia na interfejs fa0/0 R1, gdzie lista `blokada` (`deny ip any any`) go odrzuca.
+
+Sprawdź licznik trafień:
+```cisco
+show ip access-lists blokada
+```
+
+(Opcjonalnie) przywrócenie inspekcji:
+```cisco
+configure terminal
+interface fa 0/1
+ ip inspect inspekcja in
+ end
+```
+
+---
+
+## 9. Gotowe konfiguracje (do skopiowania / weryfikacji)
+
+### Ruter R2 (KOMPUTER 1)
+```cisco
+hostname R2
+ip http server
+ip http authentication local
+aaa new-model
+username sieci privilege 15 password 0 sieci
+enable password sieci
+ip domain-name sieci
+crypto key generate rsa
+line vty 0 15
+ transport input all
+ login local
+ exit
+interface fa 0/0
+ ip address 200.200.200.2 255.255.255.0
+ no shutdown
+ exit
+ip route 0.0.0.0 0.0.0.0 200.200.200.1
+```
+
+### Ruter R1 — statefull firewall (KOMPUTER 2)
+```cisco
+hostname R1
+ip access-list extended uslugi
+ permit icmp any any
+ permit tcp any host 200.200.200.2 eq www
+ permit tcp any host 200.200.200.2 eq telnet
+ permit tcp any host 200.200.200.2 eq 22
+ exit
+ip access-list extended blokada
+ deny ip any any
+ exit
+interface fa 0/1
+ ip address 200.200.201.1 255.255.255.0
+ ip access-group uslugi in
+ no ip redirects
+ no ip unreachables
+ no ip proxy-arp
+ no shutdown
+ exit
+interface fa 0/0
+ ip address 200.200.200.1 255.255.255.0
+ ip access-group blokada in
+ no shutdown
+ exit
+ip inspect log drop-pkt
+ip inspect name inspekcja icmp
+ip inspect name inspekcja tcp
+ip inspect name inspekcja dns
+interface fa 0/1
+ ip inspect inspekcja in
+ exit
+```
+
+---
+
+## 10. Najczęstsze problemy
+
+- **`crypto key generate rsa` zwraca błąd** → najpierw ustaw `ip domain-name`. Wybierz rozmiar klucza ≥ 1024 (dla SSH).
+- **SSH/telnet nie loguje** → na R2 brak `login local` na `line vty` lub brak konta `username`. Z `aaa new-model` logowanie domyślnie korzysta z lokalnej bazy.
+- **Brak pingu PC → R2** → sprawdź bramę na PC (`200.200.201.1`), trasę domyślną na R2 (`200.200.200.1`), `no shutdown` na interfejsach R1.
+- **Usługi nie działają mimo inspekcji** → upewnij się, że lista `uslugi` jest `in` na fa0/1, `blokada` jest `in` na fa0/0, a `ip inspect inspekcja in` jest na fa0/1.
+- **Po `no ip inspect` ruch wciąż przechodzi** → poczekaj na wygaśnięcie istniejących sesji (`show ip inspect sessions`) lub nawiąż całkiem nowe połączenie.
