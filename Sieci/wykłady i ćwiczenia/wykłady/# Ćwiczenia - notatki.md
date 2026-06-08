@@ -5946,6 +5946,7 @@ Cat5500> (enable) trace 10.99.1.1
 
 ---
 
+<<<<<<< HEAD
 # Laboratorium 048 — Statefull Firewall na ruterach Cisco (Context Based Access Control)
 
 Konfiguracja zapory stanowej opartej o reguły inspekcji (CBAC). Udostępnianie wybranych usług DMZ do sieci publicznej.
@@ -6157,10 +6158,84 @@ Karta sieciowa wpięta do fa0/1 R1 (sieć public). Ustaw statycznie:
 netsh interface ip set address name="Ethernet" static 200.200.201.2 255.255.255.0 200.200.201.1
 ipconfig
 ping 200.200.201.1
+=======
+# Sieci Komputerowe – Lab 056 -  HP ProCurve 2650 (VLAN, Routing, Zabezpieczenia)
+
+> **Uwaga ogólna:** Pracujemy na przełączniku HP ProCurve 2650. Jeden komputer służy do konfiguracji przez konsolę/telnet, drugi jako stacja testująca. Parametry PuTTY (konsola): **9600 bps, 8 bitów, brak parzystości, 1 bit stopu, brak flow control**.
+
+---
+
+## Schemat stanowiska i podłączenie fizyczne
+
+```
+[KOMPUTER A] ──── kabel konsolowy RJ45 ──── [port CONSOLE przełącznika HP]
+[KOMPUTER A] ──── kabel prosty UTP ──────── [port 1 przełącznika]   ← VLAN 1
+[KOMPUTER B] ──── kabel prosty UTP ──────── [port 17 przełącznika]  ← VLAN 20
+```
+
+| Kabel | Typ | Od → Do |
+|-------|-----|---------|
+| Konsolowy | RJ45 (seryjny HP) | Komputer A COM → port CONSOLE HP |
+| Sieciowy (A) | UTP prosty | Komputer A karta sieciowa → port 1 switcha |
+| Sieciowy (B) | UTP prosty | Komputer B karta sieciowa → port 17 switcha |
+
+> **Drugi przełącznik (Zadanie C.6):** połącz oba przełączniki kablem UTP prostym między portami **tagowanymi (trunk)** – np. port 24 ↔ port 24.
+
+---
+
+## Zadanie A – Pierwsze uruchomienie i podstawowa konfiguracja IP
+
+### KOMPUTER A – logowanie przez PuTTY (Serial)
+
+Otwórz PuTTY → Connection type: **Serial** → Port: COM1 (lub COM3 – sprawdź w Menedżerze urządzeń) → Speed: 9600 → Open.
+
+Po włączeniu przełącznika poczekaj na prompt i wciśnij Enter:
+
+```
+! Wejdź w tryb uprzywilejowany
+Switch> enable
+Switch#
+
+! Wejdź w tryb konfiguracji
+Switch# configure terminal
+Switch(config)#
+```
+
+### KOMPUTER A – Adres IP na interfejsie VLAN 1
+
+```
+! Wejdź do konfiguracji VLAN 1 (domyślny VLAN)
+Switch(config)# vlan 1
+Switch(vlan-1)# ip address 192.168.10.1 255.255.255.0
+Switch(vlan-1)# exit
+```
+
+> Zasada: **jeden VLAN = jeden interfejs IP**. VLAN 1 to domyślny VLAN – wszystkie porty są do niego przypisane fabrycznie.
+
+### KOMPUTER A – Sprawdzenie konfiguracji
+
+```
+Switch# show running-config
+Switch# show vlan
+Switch# show interfaces brief
+```
+
+### KOMPUTER B – Konfiguracja sieciowa stacji
+
+W systemie Windows (Panel sterowania → Sieć → IPv4):
+- IP: `192.168.10.2`
+- Maska: `255.255.255.0`
+- Brama: `192.168.10.1`
+
+Test połączenia z VLAN 1:
+```
+ping 192.168.10.1
+>>>>>>> 546683bd73def592952ca14e96fa7e40df2b87d2
 ```
 
 ---
 
+<<<<<<< HEAD
 ## 6. Testy usług (KOMPUTER 2 — z poziomu stacji PC)
 
 Cel: ze stacji PC w sieci public połączyć się z usługami serwera R2 (`200.200.200.2`).
@@ -6247,10 +6322,261 @@ configure terminal
 interface fa 0/1
  ip inspect inspekcja in
  end
+=======
+## Zadanie B – Zabezpieczenia: Telnet, WWW, SSH
+
+### KOMPUTER A – Włączenie Telnetu
+
+```
+Switch(config)# telnet-server
+
+! Sprawdzenie stanu
+Switch(config)# show telnet
+
+! Wyłączenie (jeśli potrzeba)
+Switch(config)# no telnet
+```
+
+### KOMPUTER B – Test Telnetu
+
+Otwórz PuTTY → Connection type: **Telnet** → Host: `192.168.10.1` → Port: 23 → Open.
+
+Zaloguj się tak samo jak przez konsolę.
+
+### KOMPUTER A – Włączenie serwera WWW
+
+```
+Switch(config)# web-management
+
+! Wyłączenie
+Switch(config)# no web-management
+```
+
+### KOMPUTER B – Test WWW
+
+Otwórz przeglądarkę → wpisz `http://192.168.10.1` → zaloguj się.
+
+### KOMPUTER A – Konfiguracja SSH
+
+```
+! Ustaw długość klucza
+Switch(config)# ip ssh key-size 1024
+
+! Wygeneruj klucz (można powtarzać)
+Switch(config)# crypto key generate
+
+! Zmień port jeśli inny niż 22 (opcjonalnie)
+Switch(config)# ip ssh port 2222
+
+! Włącz serwer SSH
+Switch(config)# ip ssh
+
+! Sprawdzenie
+Switch(config)# show ip ssh
+
+! Wyłączenie
+Switch(config)# no ip ssh
+```
+
+### KOMPUTER B – Test SSH
+
+Otwórz PuTTY → Connection type: **SSH** → Host: `192.168.10.1` → Port: 2222 → Open.
+
+---
+
+## Zadanie C – Konfiguracja VLAN
+
+### KOMPUTER A – Sprawdzenie aktualnych VLAN
+
+```
+! Lista wszystkich VLAN
+Switch(config)# show vlan
+
+! Szczegóły konkretnego VLAN (np. VLAN 1)
+Switch(config)# show vlan 1
+```
+
+### KOMPUTER A – Tworzenie dwóch nowych VLAN
+
+```
+! Utwórz VLAN 20
+Switch(config)# vlan 20
+Switch(vlan-20)# exit
+
+! Utwórz VLAN 21
+Switch(config)# vlan 21
+Switch(vlan-21)# exit
+```
+
+### KOMPUTER A – Przypisanie portów do VLAN
+
+```
+! Wejdź do konfiguracji VLAN 20
+Switch(config)# vlan 20
+
+! Port NIETAGOWANY (access) → dla stacji PC (Komputer B)
+Switch(vlan-20)# untagged 17-20
+
+! Port TAGOWANY (trunk) → dla połączenia z innym przełącznikiem
+Switch(vlan-20)# tagged 24
+
+! Wyjście
+Switch(vlan-20)# exit
+
+! VLAN 21 – inne porty
+Switch(config)# vlan 21
+Switch(vlan-21)# untagged 21-23
+Switch(vlan-21)# tagged 24
+Switch(vlan-21)# exit
+```
+
+> **Różnica tagged / untagged:**
+> - `untagged` (access) → port do stacji PC, ramki bez znacznika 802.1Q
+> - `tagged` (trunk) → port do innego przełącznika, ramki ze znacznikiem 802.1Q
+>
+> **Uwaga:** port nie może być jednocześnie `tagged` i `untagged` w różnych VLAN – to błąd konfiguracji!
+
+### KOMPUTER A – Usuwanie portów z VLAN
+
+```
+Switch(config)# vlan 20
+Switch(vlan-20)# no untagged 17-20
+Switch(vlan-20)# no tagged 24
+Switch(vlan-20)# exit
+```
+
+### KOMPUTER A – Adresy IP dla VLAN
+
+```
+! Adres IP interfejsu VLAN 1 (już skonfigurowany w Zadaniu A)
+Switch(config)# vlan 1
+Switch(vlan-1)# ip address 192.168.10.1 255.255.255.0
+Switch(vlan-1)# exit
+
+! Adres IP interfejsu VLAN 20 (zmienione: 172.16.20.x zamiast 200.200.0.x)
+Switch(config)# vlan 20
+Switch(vlan-20)# ip address 172.16.20.1 255.255.255.0
+Switch(vlan-20)# exit
+
+! Adres IP interfejsu VLAN 21
+Switch(config)# vlan 21
+Switch(vlan-21)# ip address 172.16.21.1 255.255.255.0
+Switch(vlan-21)# exit
+```
+
+### KOMPUTER A – Weryfikacja interfejsów
+
+```
+Switch# show interfaces
+Switch# show interfaces brief
+Switch# show vlan
+```
+
+### KOMPUTER B – Testy komunikacji między VLAN
+
+Zmień konfigurację IP stacji (port 17 należy do VLAN 20):
+- IP: `172.16.20.2`
+- Maska: `255.255.255.0`
+- Brama: `172.16.20.1`
+
+```
+! Test w obrębie VLAN 20
+ping 172.16.20.1
+
+! Test między VLAN (przed włączeniem routingu – powinien FAIL)
+ping 192.168.10.1
+```
+
+### Zadanie C.6 – Połączenie dwóch przełączników (praca z parą)
+
+```
+! Fizycznie: kabel UTP prosty między port 24 przełącznika 1 a port 24 przełącznika 2
+
+! Na przełączniku 2 (Komputer A przełącza kabel konsolowy):
+Switch(config)# vlan 20
+Switch(vlan-20)# tagged 24
+Switch(vlan-20)# untagged 1-8
+Switch(vlan-20)# exit
+
+Switch(config)# vlan 21
+Switch(vlan-21)# tagged 24
+Switch(vlan-21)# untagged 9-16
+Switch(vlan-21)# exit
+```
+
+Sprawdź czy stacje podłączone do tego samego VLAN na różnych przełącznikach się pingują.
+
+---
+
+## Zadanie D – Inne ustawienia konfiguracyjne
+
+### KOMPUTER A – Nazwa hosta
+
+```
+Switch(config)# hostname SW-LAB
+SW-LAB(config)#
+```
+
+### KOMPUTER A – Podgląd konfiguracji
+
+```
+Switch# show running-config
+```
+
+### KOMPUTER A – SNMP community
+
+```
+Switch(config)# snmp-server community "labread" unrestricted
+```
+
+### KOMPUTER A – Konfiguracja QoS na porcie
+
+```
+! Wybierz port 4
+Switch(config)# interface 4
+
+! Ustaw priorytet QoS (0–7, gdzie 7 = najwyższy)
+Switch(eth-4)# qos priority 5
+Switch(eth-4)# exit
+```
+
+### KOMPUTER A – Port Trunk (agregacja łączy)
+
+```
+! Agreguj porty 1–4 w jeden logiczny trunk o nazwie "Trunk1"
+Switch(config)# trunk 1-4 Trunk1
+```
+
+> Drugi przełącznik musi mieć tak samo skonfigurowane porty i połączone kablami 1:1.
+> Uwaga: HP ogranicza agregację do portów w tej samej grupie 12-portowej (np. 1–12 lub 13–24).
+
+### Skróty komend HP
+
+| Pełna komenda | Skrót |
+|---------------|-------|
+| `show` | `sh` |
+| `address` | `add` |
+| `memory` | `mem` |
+| `write` | `wr` |
+| `configure` | `conf` |
+| `terminal` | `t` |
+
+### Nawigacja po menu konfiguracji
+
+```
+! Cofnij o jeden poziom
+Switch(vlan-20)# exit
+Switch(config)#
+
+! Wyjdź na sam szczyt (tryb exec)
+Switch(vlan-20)# end
+Switch#
+>>>>>>> 546683bd73def592952ca14e96fa7e40df2b87d2
 ```
 
 ---
 
+<<<<<<< HEAD
 ## 9. Gotowe konfiguracje (do skopiowania / weryfikacji)
 
 ### Ruter R2 (KOMPUTER 1)
@@ -6317,3 +6643,150 @@ interface fa 0/1
 - **Brak pingu PC → R2** → sprawdź bramę na PC (`200.200.201.1`), trasę domyślną na R2 (`200.200.200.1`), `no shutdown` na interfejsach R1.
 - **Usługi nie działają mimo inspekcji** → upewnij się, że lista `uslugi` jest `in` na fa0/1, `blokada` jest `in` na fa0/0, a `ip inspect inspekcja in` jest na fa0/1.
 - **Po `no ip inspect` ruch wciąż przechodzi** → poczekaj na wygaśnięcie istniejących sesji (`show ip inspect sessions`) lub nawiąż całkiem nowe połączenie.
+=======
+## Zadanie E – Rutowanie między VLAN
+
+### KOMPUTER A – Włączenie rutowania IP
+
+```
+Switch(config)# ip routing
+
+! Weryfikacja
+Switch# show ip route
+```
+
+### KOMPUTER A – Definicja trzech VLAN z adresacją
+
+```
+Switch(config)# vlan 10
+Switch(vlan-10)# ip address 10.10.10.1 255.255.255.0
+Switch(vlan-10)# untagged 1-8
+Switch(vlan-10)# exit
+
+Switch(config)# vlan 20
+Switch(vlan-20)# ip address 10.20.20.1 255.255.255.0
+Switch(vlan-20)# untagged 9-16
+Switch(vlan-20)# exit
+
+Switch(config)# vlan 30
+Switch(vlan-30)# ip address 10.30.30.1 255.255.255.0
+Switch(vlan-30)# untagged 17-22
+Switch(vlan-30)# exit
+```
+
+### KOMPUTER A – Statyczne trasy rutowania
+
+```
+! Trasa statyczna: sieć docelowa, maska, brama
+Switch(config)# ip route 10.10.10.0 255.255.255.0 10.20.20.2
+
+! Usunięcie trasy
+Switch(config)# no ip route 10.10.10.0 255.255.255.0 10.20.20.2
+
+! Domyślna trasa (wszystko co nie pasuje → idzie tu)
+Switch(config)# ip route 0.0.0.0 0.0.0.0 10.10.10.254
+
+! Trasa null – porzuca pakiety do danej sieci
+Switch(config)# ip route 10.99.0.0 255.255.255.0 reject
+```
+
+### KOMPUTER A – Weryfikacja rutowania
+
+```
+Switch# show ip route
+Switch# show vlan
+Switch# show interfaces brief
+```
+
+### KOMPUTER B – Test rutowania między VLAN
+
+Podłącz Komputer B do portu 9 (VLAN 20). Ustaw adres IP:
+- IP: `10.20.20.2`
+- Maska: `255.255.255.0`
+- Brama: `10.20.20.1`
+
+Przełącz Komputer A do portu 1 (VLAN 10). Ustaw adres IP:
+- IP: `10.10.10.2`
+- Maska: `255.255.255.0`
+- Brama: `10.10.10.1`
+
+```
+! Z Komputera B – ping do VLAN 10 (przez ruter przełącznika)
+ping 10.10.10.2
+
+! Traceroute – zobaczysz przeskok przez interfejs przełącznika
+tracert 10.10.10.2     (Windows)
+traceroute 10.10.10.2  (Linux)
+```
+
+### Tabela konfiguracji PC dla testów rutowania
+
+| Stacja | Port switcha | VLAN | Adres IP | Maska | Brama |
+|--------|-------------|------|----------|-------|-------|
+| Komputer A | 1 | 10 | 10.10.10.2 | 255.255.255.0 | 10.10.10.1 |
+| Komputer B | 9 | 20 | 10.20.20.2 | 255.255.255.0 | 10.20.20.1 |
+
+---
+
+## Zadanie F – Zarządzanie przez WWW
+
+### KOMPUTER B – Dostęp przez przeglądarkę
+
+Upewnij się że `web-management` jest włączone (Zadanie B), następnie:
+
+```
+http://192.168.10.1
+```
+
+Przez GUI możesz zrobić wszystko co przez konsolę: VLAN, porty, routing, SSH, SNMP. Sprawdź każdą zakładkę i porównaj z tym co skonfigurowałeś konsolą.
+
+---
+
+## Szybka ściąga – kluczowe komendy HP ProCurve
+
+### Tryby pracy
+
+| Tryb | Prompt | Jak wejść |
+|------|--------|-----------|
+| User EXEC | `Switch>` | domyślny po logowaniu |
+| Privileged EXEC | `Switch#` | `enable` |
+| Global Config | `Switch(config)#` | `configure terminal` |
+| VLAN Config | `Switch(vlan-X)#` | `vlan X` |
+| Interface Config | `Switch(eth-X)#` | `interface X` |
+
+### Komendy
+
+| Komenda | Opis |
+|---------|------|
+| `show running-config` | Aktualna konfiguracja |
+| `show vlan` | Lista VLAN i portów |
+| `show vlan <nr>` | Szczegóły konkretnego VLAN |
+| `show interfaces` | Stan interfejsów |
+| `show interfaces brief` | Skrócony stan interfejsów |
+| `show ip route` | Tablica routingu |
+| `show telnet` | Stan serwera Telnet |
+| `show ip ssh` | Stan serwera SSH |
+| `vlan <nr>` | Wejdź do konfiguracji VLAN |
+| `ip address <IP> <maska>` | Adres IP interfejsu VLAN |
+| `ip address <IP>/<prefix>` | Adres IP (notacja CIDR) |
+| `untagged <porty>` | Port access (do PC) |
+| `tagged <porty>` | Port trunk (do przełącznika) |
+| `no untagged <porty>` | Usuń port z VLAN |
+| `ip routing` | Włącz routing między VLAN |
+| `no ip routing` | Wyłącz routing |
+| `ip route <sieć> <maska> <brama>` | Trasa statyczna |
+| `ip route 0.0.0.0 0.0.0.0 <brama>` | Trasa domyślna |
+| `ip route <sieć> <maska> reject` | Trasa null (porzuć pakiety) |
+| `telnet-server` | Włącz Telnet |
+| `web-management` | Włącz serwer WWW |
+| `ip ssh` | Włącz SSH |
+| `crypto key generate` | Generuj klucz SSH |
+| `ip ssh key-size 1024` | Długość klucza SSH |
+| `trunk <porty> <nazwa>` | Agregacja portów (LAG) |
+| `hostname <nazwa>` | Nazwa hosta |
+| `interface <nr>` | Konfiguracja portu |
+| `qos priority <0-7>` | Priorytet QoS portu |
+| `snmp-server community "<nazwa>" unrestricted` | Konfiguracja SNMP |
+| `exit` | Cofnij o jeden poziom |
+| `end` | Wróć do trybu exec |
+>>>>>>> 546683bd73def592952ca14e96fa7e40df2b87d2
