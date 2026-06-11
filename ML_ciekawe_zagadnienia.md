@@ -1449,7 +1449,7 @@ Decydujemy się zachować tylko $k$ pierwszych składowych (tych najważniejszyc
 
 - Czyszczenie danych: Kompresja często poprawia działanie modeli ML, bo usuwa drobne, przypadkowe wahania w danych (overfitting), zostawiając tylko główne trendy.
 
-### CZym jest LLE
+### Czym jest LLE
 
 LLE to algorytm z rodziny Manifold Learning (uczenia rozmaitości). Jego głównym założeniem jest to, że nawet jeśli zbiór danych jest bardzo skomplikowany i zakrzywiony globalnie (np. jak wspomniana wcześniej "szwajcarska rolada"), to jeśli spojrzymy na niego przez lupę, każdy mały fragment jest niemal płaski (liniowy).
 
@@ -1498,5 +1498,28 @@ Wady:
 - Czułość na szum: Jeśli między warstwami "rolady" znajdzie się przypadkowy punkt (szum), LLE może błędnie "skleić" te warstwy.
 
 - Problemy z brzegami: Na krawędziach rozmaitości LLE czasem radzi sobie gorzej, bo punkty mają tam sąsiadów tylko z jednej strony.
+
+## Z lab10
+
+### Odpowiedzi na pytania z lab-u
+
+Zadanie 1 — analiza błędu
+
+- Co daje nn.ModuleList? Rejestruje warstwy jako podmoduły modelu. Dzięki temu ich parametry pojawiają się w model.parameters() (więc optymalizator je widzi i aktualizuje), są przenoszone przez .to(device) i zapisywane w state_dict(). Gdybyś użył zwykłej listy Pythona ([]), warstwy byłyby „niewidzialne" — parametry nie trenowałyby się wcale. ModuleList pozwala dodatkowo budować zmienną liczbę warstw w pętli (dynamiczna architektura), a w odróżnieniu od Sequential nie narzuca przepływu — kolejność ustalasz w forward. To dokładnie ten mechanizm, który wykorzystujesz potem w DynamicMLP.
+
+- Czy strata i norma gradientu pokazują coś niepokojącego? Tak — gradienty eksplodują. W diagnozie Twój kod liczy normę gradientu na starcie i wychodzi wartość rzędu ~6·10⁵ przy stracie ~10⁴. Winowajcą jest inicjalizacja nn.init.normal_(layer.weight, std=1.0): odchylenie 1.0 jest ogromne, więc przy 4+ warstwach wariancja aktywacji rośnie wykładniczo w przód, a gradientów w tył. Model dostaje gigantyczne, niestabilne kroki i przy SGD(lr=0.001) nie jest w stanie się uczyć. To podręcznikowy exploding gradients z powodu złej inicjalizacji.
+
+- Czy zmiana funkcji aktywacji rozwiązuje problem? Nie — to nie aktywacja jest źródłem. Zamiana ReLU na Tanh/Sigmoid może trochę złagodzić objaw (te funkcje są ograniczone, więc tłumią eksplozję aktywacji w przód), ale przy dużych wejściach Tanh/Sigmoid się nasycają i wtedy gradienty znikają — wymieniasz exploding na vanishing. Prawdziwe rozwiązanie to poprawna inicjalizacja: Kaiming/He dla ReLU (to robi Twój fix_initialization / pętla re-inicjalizująca wagi) albo Xavier dla Tanh, plus standaryzacja danych. Po tej naprawie strata spada z ~10⁴ do ~0.015 w 20 epok. Czyli aktywacja to czynnik drugorzędny; kluczowa jest inicjalizacja (i skalowanie danych).
+
+- Czy głębsza/szersza sieć pomaga? Dla tego zadania — nie. Przy złej inicjalizacji im głębiej, tym gorzej (eksplozja narasta z każdą warstwą). Po naprawie inicjalizacji nawet płytka sieć (1–2 warstwy ukryte) w pełni wystarcza do regresji prostej funkcji kwadratowej; dodatkowe warstwy nie poprawiają wyniku, za to zwiększają ryzyko niestabilności i koszt. hidden_dim ma znaczenie umiarkowane: zbyt mało neuronów ogranicza pojemność, ale 64 to już z naddatkiem — dalsze zwiększanie nic nie daje. Wniosek: o sukcesie decyduje poprawna optymalizacja, nie rozmiar sieci.
+
+Zadanie 2 — Armageddon
+
+- Czy model (a) zauważył anomalię/uskok? Nie. Naiwny SGD na całym zbiorze (full-batch, lr=0.01, 500 epok) łapie tylko gładki, globalny trend i wygładza lokalną anomalię — na asteroid_prediction_1.png krzywa przechodzi obok skoku. Powód: full-batch robi mało uśrednionych kroków na epokę → wolna konwergencja, model nie zdąży odwzorować lokalnego detalu. Strata końcowa ~0.18.
+
+- Czy (b) uzyskałeś lepsze uogólnienie? Tak. Po przejściu na mini-batche + Adam (lr=5e-3, 2000 epok) model dopasowuje i trend, i anomalię — na asteroid_prediction_2.png uskok jest odwzorowany, a strata spada do ~0.004. Mini-batche dają więcej i bardziej zróżnicowanych kroków oraz szum stochastyczny (łatwiej wyjść z płaskich obszarów), a Adam adaptuje krok per-parametr, co przyspiesza dopasowanie. To potwierdza obie wskazówki z treści (podział na partie + zmiana optymalizatora/lr). Warto pamiętać o niuansie: tu „lepiej" = wierniejsze odwzorowanie; przy bardzo agresywnym dopasowaniu zawsze pilnuj, by nie wejść w przeuczenie.
+(Zadania 3 i 4 nie mają pytań otwartych — to czyste zadania implementacyjne: optymalizacja hiperparametrów Optuną z progiem CrossEntropyLoss < 0.08 oraz regresja studenty_ms z identycznym przetwarzaniem train/test.)
+
+
 
 ---
